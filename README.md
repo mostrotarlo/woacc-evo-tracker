@@ -1,79 +1,89 @@
-# WOACC Tracker v1.1
+# WOACC EVO Tracker 🚀
 
-Tracker risultati per Assetto Corsa EVO basato sui JSON generati dal dedicated server.
+![Python](https://img.shields.io/badge/Python-3.10+-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Active-success)
 
-## Novità v1.1
+Local tracker for **Assetto Corsa EVO** with leaderboard, records and optional **WOACC global data sharing**.
 
-- Supporto reverse proxy sotto sottocartella, es. `https://woacc.zapto.org/tracker/`.
-- Dettaglio pilota con:
-  - best lap;
-  - giro potenziale, calcolato con migliori S1+S2+S3 validi;
-  - media giri validi;
-  - media di tutti i giri.
-- Annuncio record evento su Discord per singola cartella monitorata:
-  - non retroattivo;
-  - la finestra record parte quando attivi la spunta;
-  - il primo giro valido diventa record iniziale;
-  - i successivi miglioramenti vengono annunciati via webhook Discord.
-- Pagina web `Record`.
-- Tema personalizzabile da launcher:
-  - font;
-  - colori principali;
-  - accento;
-  - sfondo/card/testi.
-- Database aggiornato con migrazioni automatiche.
+---
 
-## Avvio rapido
+## 🚀 Features
+
+* 📊 Session tracking (Practice / Qualifying / Race)
+* 🏁 Leaderboard per track, car and driver
+* 📈 Records and statistics
+* 🌍 Optional integration with **WOACC global network**
+* 🔌 API Bridge for external tools (ACC_JSON_Monitor_Plus 2)
+* 🧠 Automatic JSON ingestion and processing
+* 🎮 Designed for **private servers and communities**
+
+---
+
+## ⚙️ Installation
 
 ```bash
+git clone https://github.com/mostrotarlo/woacc-evo-tracker.git
+cd woacc-evo-tracker
 pip install -r requirements.txt
 python run_tracker.py
 ```
 
-## Caddy sotto /tracker
+Open:
 
-Esempio Caddyfile:
+http://127.0.0.1:5055
 
-```caddyfile
-woacc.zapto.org {
-    redir /tracker /tracker/
+---
 
-    handle_path /tracker/* {
-        reverse_proxy 127.0.0.1:5055 {
-            header_up X-Forwarded-Prefix /tracker
-        }
-    }
+## 🌍 Live Demo
 
-    handle_path /accweb/* {
-        reverse_proxy 127.0.0.1:8090
-    }
+👉 **https://woacc.zapto.org/tracker**
 
-    handle {
-        reverse_proxy 127.0.0.1:9001
-    }
-}
+Try:
+
+* Leaderboard filters
+* Session details
+* Records
+
+---
+
+## 🌐 WOACC Integration
+
+* Optional data sharing
+* Local-first design
+* Global aggregation via WOACC
+
+Join from inside the app → **WOACC section**
+
+---
+
+## 🔗 API
+
+```
+/api/woacc/ping
+/api/woacc/sessions
+/api/woacc/session/<id>/original.json
 ```
 
-Nel launcher imposta `Base path reverse proxy` a:
+---
 
-```txt
-/tracker
-```
+## 🔒 Security
 
-## Regole dati
+* API key protected
+* Sharing optional
+* Community page local-only
 
-- Server logico = `server_name + track_name`.
-- Piloti accorpati via `player_id` Steam, se presente.
-- Nome pilota aggiornato con l'ultimo nome rilevato.
-- Classifiche e statistiche separate per `pilota + auto`.
-- Sessioni senza giri non importate nel DB operativo.
-- FP/Q = classifica tempi.
-- Race = ordine arrivo da standings JSON.
-- Condizioni wet/dry e storico penalità dettagliato non risultano esportati nei JSON testati.
+---
 
-## Discord record
+## 📬 Contact
 
-Per ogni cartella monitorata puoi attivare `Configura record Discord`.
+Discord: **Fabio / WOACC**
+
+---
+
+## 📄 License
+
+MIT License
 Quando attivi la spunta parte una nuova finestra record evento. Non vengono annunciati record storici già presenti.
 
 
