@@ -1,0 +1,8 @@
+Comando PyInstaller consigliato:
+
+python -m pip install pyinstaller -r requirements.txt
+pyinstaller --onefile --windowed --name "WOACC Tracker" run_tracker.py
+
+Nota: per una build completa con template/static inclusi può servire aggiungere --add-data:
+Windows:
+pyinstaller --onefile --windowed --name "WOACC Tracker" --add-data "woacc_tracker/web/templates;woacc_tracker/web/templates" --add-data "woacc_tracker/web/static;woacc_tracker/web/static" run_tracker.py

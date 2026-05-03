@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head"><a href="{{ url_for('servers') }}">← Server</a><h1>{{ server.server_name }}</h1><p>{{ server.track_name }}{% if server.track_layout %} / {{ server.track_layout }}{% endif %}</p><p>Prima: {{ server.first_session_at or '—' }} · Ultima: {{ server.last_session_at or '—' }}</p></div>
+
+<section class="panel">
+<h2>Monitoraggio record</h2>
+
+<table>
+<thead>
+<tr>
+<th>Sorgente</th>
+<th>Record Discord</th>
+<th>Recap settimanale</th>
+<th>Nome annuncio</th>
+<th>Webhook</th>
+<th>Finestra record da</th>
+</tr>
+</thead>
+
+<tbody>
+{% for src in source_rows %}
+<tr>
+
+<td>
+<strong>{{ src.name }}</strong>
+</td>
+
+<td>
+{% if src.announce_records %}
+<span class="badge imported">ATTIVO</span>
+{% else %}
+<span class="badge skipped">OFF</span>
+{% endif %}
+</td>
+
+<td>
+{% if src.weekly_recap_enabled %}
+<span class="badge imported">ATTIVO</span>
+{% else %}
+<span class="badge skipped">OFF</span>
+{% endif %}
+</td>
+
+<td>
+{{ src.announce_name or '—' }}
+</td>
+
+<td>
+{% if src.discord_webhook_url %}
+<span class="badge">Configurato</span>
+{% else %}
+—
+{% endif %}
+</td>
+
+<td>
+{{ src.record_window_started_at or '—' }}
+</td>
+
+</tr>
+{% else %}
+<tr>
+<td colspan="6" class="empty">
+Nessuna sorgente collegata a questo server
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+
+{% if source_rows %}
+<div class="card subtle" style="margin-top:14px;padding:14px">
+<strong>Legenda</strong><br><br>
+
+• Record Discord annuncia nuovi record evento da quando la finestra è stata attivata.<br>
+• Recap settimanale invia un riepilogo Discord dei record fatti nei server monitorati.<br>
+• Webhook e impostazioni si modificano dall'app desktop → Cartelle monitorate.
+</div>
+{% endif %}
+
+</section>
+
+<section class="panel"><h2>Migliori tempi</h2><table><thead><tr><th>Pos</th><th>Pilota</th><th>Categoria</th><th>Auto</th><th>Best lap</th><th>Giri</th><th>Sessione</th><th>Data</th></tr></thead><tbody>
+{% for b in bests %}<tr class="clickable" data-href="{{ url_for('session_detail', session_id=b.session_id) }}"><td>{{ loop.index }}</td><td>{{ b.display_name }}</td><td>{% if b.driver_category %}<span class="badge category">{{ b.driver_category }}</span>{% else %}—{% endif %}</td><td>{{ b.car_name }}</td><td><strong>{{ b.best_lap_ms|lap_time }}</strong></td><td>{{ b.laps_total }} ({{ b.laps_valid }})</td><td>{{ b.session_type }}</td><td>{{ b.session_datetime }}</td></tr>{% else %}<tr><td colspan="8" class="empty">Nessun tempo valido.</td></tr>{% endfor %}
+</tbody></table></section>
+<section class="panel"><h2>Sessioni</h2><table><thead><tr><th>Data</th><th>Tipo</th><th>Piloti</th><th>Giri</th><th>Best lap</th></tr></thead><tbody>
+{% for s in sessions %}<tr class="clickable" data-href="{{ url_for('session_detail', session_id=s.id) }}"><td>{{ s.session_datetime }}</td><td><span class="badge">{{ s.session_type }}</span></td><td>{{ s.drivers_count }}</td><td>{{ s.laps_total }}</td><td>{{ s.best_lap_ms|lap_time }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Nessuna sessione.</td></tr>{% endfor %}
+</tbody></table></section>
+{% endblock %}

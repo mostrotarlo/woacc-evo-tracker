@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ cfg.community_name }} - WOACC Tracker</title>
+  <style>
+    :root {
+      --bg: {{ theme.background|default('#0b0f14') }};
+      --card: {{ theme.card|default('#141b24') }};
+      --card2: {{ theme.card2|default('#101720') }};
+      --line: {{ theme.line|default('#263241') }};
+      --text: {{ theme.text|default('#e8eef6') }};
+      --muted: {{ theme.muted|default('#93a4b8') }};
+      --accent: {{ theme.accent|default('#2fd17c') }};
+      --danger: {{ theme.danger|default('#ff5c5c') }};
+      --warn: {{ theme.warn|default('#f7c948') }};
+      --font-family: {{ theme.font_family|default('Segoe UI, Arial, sans-serif') }};
+      --font-size-base: {{ theme.font_size|default(16) }}px;
+    }
+  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=12_1_4">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('home') }}"><span>WOACC</span> Tracker</a>
+  <nav>
+    <a href="{{ url_for('home') }}">{{ t('home') }}</a>
+    <a href="{{ url_for('servers') }}">{{ t('servers') }}</a>
+    <a href="{{ url_for('sessions_page') }}">{{ t('sessions') }}</a>
+    <a href="{{ url_for('leaderboard') }}">{{ t('leaderboard') }}</a>
+    <a href="{{ url_for('records') }}">{{ t('records') }}</a>
+    <a href="{{ url_for('woacc_community') }}">WOACC</a>
+    <a href="{{ url_for('logs') }}">{{ t('logs') }}</a>
+    {% if cfg.password_enabled %}<a href="{{ url_for('logout') }}">{{ t('logout') }}</a>{% endif %}
+  </nav>
+  <button type="button" class="share-btn top-share" data-share-page data-copied-text="{{ t('copied_link') }}" data-failed-text="{{ t('copy_failed') }}" title="{{ t('share_current_page') }}">{{ t('share') }}</button>
+  <form class="language-form" method="get" action="{{ url_for('set_language', lang_code=lang) }}" data-language-form>
+    <label>{{ t('language') }}</label>
+    <select data-language-select>
+      {% for code, name in languages.items() %}
+      <option value="{{ url_for('set_language', lang_code=code) }}?next={{ request.full_path|urlencode }}" {% if code == lang %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</header>
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+<script src="{{ url_for('static', filename='app.js') }}?v=12_1_4"></script>
+<script>
+  document.querySelectorAll('[data-language-select]').forEach((select) => {
+    select.addEventListener('change', () => { window.location.href = select.value; });
+  });
+</script>
+</body>
+</html>

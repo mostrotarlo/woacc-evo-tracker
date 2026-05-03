@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero woacc-community-hero">
+  <div>
+    <h1>{{ t('woacc_join_title', '🌍 Entra nella community WOACC') }}</h1>
+    <p>{{ t('woacc_join_intro', 'WOACC nasce per collegare le community di Assetto Corsa EVO in un ecosistema comune: tracker locali, dati condivisi, classifiche, record e statistiche consultabili in un unico punto.') }}</p>
+  </div>
+</section>
+
+<div class="grid two">
+  <div class="card">
+    <h2>{{ t('woacc_philosophy_title', 'La filosofia WOACC') }}</h2>
+    <p>{{ t('woacc_philosophy_text', 'Il tracker resta tuo e gira sul tuo PC/server. Se scegli di condividere i dati, WOACC può leggere i JSON tramite API Bridge e inserirli nel network globale.') }}</p>
+    <ul class="clean-list">
+      <li>✅ {{ t('woacc_benefit_1', 'Più community collegate') }}</li>
+      <li>✅ {{ t('woacc_benefit_2', 'Più dati per classifiche e statistiche globali') }}</li>
+      <li>✅ {{ t('woacc_benefit_3', 'Ogni tracker può disattivare la condivisione dalla app desktop') }}</li>
+      <li>✅ {{ t('woacc_benefit_4', 'ACC_JSON_Monitor_Plus 2 importa automaticamente i JSON compatibili') }}</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>{{ t('woacc_request_title', "Richiedi l'inserimento nel WOACC") }}</h2>
+    <p>{{ t('woacc_request_text', "Per comparire nel WOACC globale, invia a Fabio l'indirizzo pubblico del tuo tracker.") }}</p>
+
+    {% if not tracker_url %}
+    <div class="notice warn">
+      <h3>{{ t('woacc_public_url_missing_title', '⚠️ Public URL non configurato') }}</h3>
+      <p>{{ t('woacc_public_url_missing_text', 'Stai aprendo il tracker da localhost o da una rete locale. Il tracker non può conoscere automaticamente il tuo indirizzo pubblico.') }}</p>
+      <ol>
+        <li>{{ t('woacc_public_url_step_1', 'Apri la app desktop del WOACC Tracker.') }}</li>
+        <li>{{ t('woacc_public_url_step_2', 'Nel campo Public URL inserisci l’indirizzo raggiungibile da internet.') }}</li>
+        <li>{{ t('woacc_public_url_step_3', 'Esempi: https://tuodominio.it/tracker oppure http://IP_PUBBLICO:5055.') }}</li>
+        <li>{{ t('woacc_public_url_step_4', 'Salva la configurazione e riapri questa pagina.') }}</li>
+      </ol>
+    </div>
+    {% endif %}
+
+    <div class="info-box">
+      <strong>{{ t('woacc_public_tracker_url', 'Il tuo indirizzo tracker pubblico:') }}</strong><br>
+      {% if tracker_url %}
+        <code>{{ tracker_url }}</code>
+        {% if tracker_url_source == 'configured' %}
+          <p class="muted">{{ t('woacc_public_url_configured_hint', 'Indirizzo preso dal campo Public URL della app desktop.') }}</p>
+        {% else %}
+          <p class="muted">{{ t('woacc_public_url_detected_hint', 'Indirizzo rilevato dalla richiesta web corrente.') }}</p>
+        {% endif %}
+      {% else %}
+        <code>{{ t('not_configured', 'Non configurato') }}</code>
+      {% endif %}
+    </div>
+
+    <div class="info-box">
+      <strong>{{ t('woacc_message_to_send', 'Messaggio da inviare:') }}</strong><br>
+      <textarea id="woacc-request-message" readonly>{{ request_message }}</textarea>
+      <button class="btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('woacc-request-message').value)">📋 {{ t('copy_message', 'Copia messaggio') }}</button>
+    </div>
+
+    <div class="actions-row">
+      <a class="btn" href="{{ woacc_url }}" target="_blank" rel="noopener">🌐 {{ t('open_woacc', 'Apri WOACC') }}</a>
+      <a class="btn primary" href="{{ discord_url }}" target="_blank" rel="noopener">💬 {{ t('open_discord', 'Apri Discord') }}</a>
+    </div>
+    <p class="muted">{{ t('discord_contact', 'Contatto Discord') }}: <strong>{{ discord_contact }}</strong></p>
+  </div>
+</div>
+{% endblock %}

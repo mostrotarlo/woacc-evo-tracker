@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head"><h1>{{ t('available_servers') }}</h1><p>{{ servers|length }} {{ t('servers')|lower }}</p></div>
+<form class="filters" method="get"><input name="q" value="{{ q }}" placeholder="{{ t('search_server_or_track') }}"><select name="sort"><option value="last" {% if sort=='last' %}selected{% endif %}>{{ t('sort_last') }}</option><option value="name" {% if sort=='name' %}selected{% endif %}>{{ t('sort_name') }}</option><option value="track" {% if sort=='track' %}selected{% endif %}>{{ t('sort_track') }}</option><option value="sessions" {% if sort=='sessions' %}selected{% endif %}>{{ t('sort_sessions') }}</option></select><select name="dir"><option value="desc" {% if direction=='desc' %}selected{% endif %}>{{ t('decreasing') }}</option><option value="asc" {% if direction=='asc' %}selected{% endif %}>{{ t('increasing') }}</option></select><button>{{ t('search') }}</button></form>
+<section class="panel"><table><thead><tr><th>{{ t('server') }}</th><th>{{ t('track') }}</th><th>{{ t('sessions_count') }}</th><th>{{ t('first_session') }}</th><th>{{ t('last_session_col') }}</th></tr></thead><tbody>
+{% for s in servers %}<tr class="clickable" data-href="{{ url_for('server_detail', server_id=s.id) }}"><td><strong>{{ s.server_name }}</strong></td><td>{{ s.track_name }}</td><td>{{ s.sessions_count }}</td><td>{{ s.first_session_at or t('none') }}</td><td>{{ s.last_session_at or t('none') }}</td></tr>{% else %}<tr><td colspan="5" class="empty">{{ t('no_servers') }}</td></tr>{% endfor %}
+</tbody></table></section>
+{% endblock %}

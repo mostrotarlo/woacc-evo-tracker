@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="leaderboard-page">
+<div class="page-head share-head">
+  <div>
+    <h1>{{ t('leaderboard_title') }}</h1>
+    <p>{{ t('leaderboard_subtitle') }}</p>
+    <p class="muted">{{ t('leaderboard_hint') }}</p>
+  </div>
+  <button type="button" class="share-btn primary-share" data-share-page data-copied-text="{{ t('copied_link') }}" data-failed-text="{{ t('copy_failed') }}">{{ t('share_leaderboard') }}</button>
+</div>
+<form class="filters" method="get">
+  <input name="server_q" value="{{ server_q }}" placeholder="{{ t('server_name_filter') }}">
+  <select name="track">
+    <option value="">{{ t('all_tracks') }}</option>
+    {% for tr in tracks %}
+    <option value="{{ tr.track_name }}" {% if track==tr.track_name %}selected{% endif %}>{{ tr.track_name }} ({{ tr.sessions_count }})</option>
+    {% endfor %}
+  </select>
+  <select name="type">
+    <option value="">{{ t('all') }}</option>
+    {% for tp in types %}<option value="{{ tp.session_type }}" {% if stype==tp.session_type %}selected{% endif %}>{{ tp.session_type }}</option>{% endfor %}
+  </select>
+  <button>{{ t('filter') }}</button>
+</form>
+<section class="panel leaderboard-panel">
+  <table class="leaderboard-table">
+    <thead>
+      <tr>
+        <th class="col-pos">{{ t('position') }}</th>
+        <th>{{ t('driver') }}</th>
+        <th class="col-category">{{ t('category') }}</th>
+        <th>{{ t('car') }}</th>
+        <th class="col-best">{{ t('best_lap') }}</th>
+        <th class="col-valid">{{ t('valid_laps') }}</th>
+        <th class="col-count">{{ t('sessions_count') }}</th>
+        <th>{{ t('server') }}</th>
+        <th>{{ t('track') }}</th>
+        <th class="col-date">{{ t('date') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="clickable" data-href="{{ url_for('session_detail', session_id=r.session_id) }}">
+        <td class="col-pos">{{ loop.index }}</td>
+        <td><div class="clip driver" title="{{ r.display_name }}"> <strong>{{ r.display_name }}</strong>{% if r.nation %}<span class="muted"> {{ r.nation }}</span>{% endif %}</div></td>
+        <td class="col-category">{% if r.driver_category %}<span class="badge category">{{ r.driver_category }}</span>{% else %}{{ t('none') }}{% endif %}</td>
+        <td><div class="clip car" title="{{ r.car_name }}">{{ r.car_name }}</div></td>
+        <td class="col-best"><strong>{{ r.best_lap_ms|lap_time }}</strong></td>
+        <td class="col-valid">{{ r.laps_valid }}</td>
+        <td class="col-count">{{ r.sessions_count }}</td>
+        <td><div class="clip" title="{{ r.server_name }}">{{ r.server_name }}</div></td>
+        <td><div class="clip track" title="{{ r.track_name }}">{{ r.track_name }}</div></td>
+        <td class="col-date">{{ r.session_datetime }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="empty">{{ t('no_results') }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+</div>
+{% endblock %}

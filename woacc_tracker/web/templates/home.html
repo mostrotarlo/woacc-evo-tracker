@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="hero">
+  <div><h1>{{ cfg.community_name }}</h1><p>{{ t('evo_results_dashboard') }}</p></div>
+</section>
+<div class="cards four">
+  <a class="card" href="{{ url_for('servers') }}"><div class="label">{{ t('detected_servers') }}</div><div class="value">{{ stats.servers or 0 }}</div></a>
+  <a class="card" href="{{ url_for('sessions_page') }}"><div class="label">{{ t('imported_sessions') }}</div><div class="value">{{ stats.sessions or 0 }}</div></a>
+  <div class="card"><div class="label">{{ t('last_session') }}</div><div class="value small">{{ stats.last_session or t('none') }}</div></div>
+  <div class="card"><div class="label">{{ t('tracks') }}</div><div class="value">{{ stats.tracks or 0 }}</div></div>
+</div>
+<section class="panel">
+  <div class="section-head"><h2>{{ t('available_servers') }}</h2><a href="{{ url_for('servers') }}">{{ t('view_all') }}</a></div>
+  <div class="server-grid">
+    {% for s in servers %}
+    <a class="server-card" href="{{ url_for('server_detail', server_id=s.id) }}">
+      <h3>{{ s.server_name }}</h3><p class="track">{{ s.track_name }}</p>
+      <div class="meta"><span>{{ s.sessions_count }} {{ t('sessions')|lower }}</span><span>{{ t('last_session') }}: {{ s.last_session_at or t('none') }}</span></div>
+    </a>
+    {% else %}<p class="empty">{{ t('no_servers') }}</p>{% endfor %}
+  </div>
+</section>
+<section class="panel">
+  <div class="section-head"><h2>{{ t('latest_sessions') }}</h2><a href="{{ url_for('sessions_page') }}">{{ t('view_all') }}</a></div>
+  <table><thead><tr><th>{{ t('date') }}</th><th>{{ t('server') }}</th><th>{{ t('track') }}</th><th>{{ t('type') }}</th><th>{{ t('drivers') }}</th><th>{{ t('best_lap') }}</th></tr></thead><tbody>
+  {% for s in sessions %}<tr class="clickable" data-href="{{ url_for('session_detail', session_id=s.id) }}"><td>{{ s.session_datetime }}</td><td>{{ s.server_name }}</td><td>{{ s.track_name }}</td><td><span class="badge">{{ s.session_type }}</span></td><td>{{ s.drivers_count }}</td><td>{{ s.best_lap_ms|lap_time }}</td></tr>{% else %}<tr><td colspan="6" class="empty">{{ t('no_sessions') }}</td></tr>{% endfor %}
+  </tbody></table>
+</section>
+{% endblock %}

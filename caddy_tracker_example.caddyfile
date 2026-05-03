@@ -1,0 +1,17 @@
+woacc.zapto.org {
+    redir /tracker /tracker/
+
+    handle_path /tracker/* {
+        reverse_proxy 127.0.0.1:5055 {
+            header_up X-Forwarded-Prefix /tracker
+        }
+    }
+
+    handle_path /accweb/* {
+        reverse_proxy 127.0.0.1:8090
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:9001
+    }
+}

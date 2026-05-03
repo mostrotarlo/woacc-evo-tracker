@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head"><h1>{{ t('import_logs') }}</h1><p>{{ t('processed_files') }}</p></div>
+<section class="panel"><table><thead><tr><th>{{ t('date') }}</th><th>{{ t('status') }}</th><th>{{ t('reason') }}</th><th>{{ t('file') }}</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.imported_at }}</td><td><span class="badge {{ r.status }}">{{ r.status }}</span></td><td>{{ r.reason or t('none') }}</td><td class="path">{{ r.file_path }}</td></tr>{% else %}<tr><td colspan="4" class="empty">{{ t('no_results') }}</td></tr>{% endfor %}
+</tbody></table></section>
+{% endblock %}

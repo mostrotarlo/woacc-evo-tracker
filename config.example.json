@@ -1,0 +1,46 @@
+{
+  "community_name": "WOACC Tracker",
+  "host_label": "",
+  "port": 5055,
+  "remote_access": true,
+  "public_url": "",
+  "base_path": "",
+  "password_enabled": false,
+  "password_hash": "",
+  "session_timeout_hours": 24,
+  "woacc_api_enabled": true,
+  "woacc_api_key": "WOACC-EVO-BRIDGE-V13-ACCJSONMONITORPLUS2",
+  "scan_interval_sec": 60,
+  "database_path": "%APPDATA%/WOACC_Tracker/woacc_tracker.db",
+  "sources": [
+    {
+      "name": "My EVO Server",
+      "path": "C:/Path/To/Assetto Corsa EVO Dedicated Server/result",
+      "enabled": true,
+      "announce_records": false,
+      "announce_name": "My EVO Server",
+      "discord_webhook_url": "",
+      "record_window_started_at": "",
+      "weekly_recap_enabled": false,
+      "weekly_recap_started_at": ""
+    }
+  ],
+  "theme": {
+    "font_family": "Segoe UI, Arial, sans-serif",
+    "font_size": 16,
+    "background": "#0b0f14",
+    "card": "#141b24",
+    "card2": "#101720",
+    "line": "#263241",
+    "text": "#e8eef6",
+    "muted": "#93a4b8",
+    "accent": "#2fd17c",
+    "danger": "#ff5c5c",
+    "warn": "#f7c948"
+  },
+  "language": "it",
+  "woacc_main_url": "https://woacc.zapto.org/",
+  "woacc_discord_url": "https://discord.com/channels/@me",
+  "woacc_discord_contact": "Fabio / WOACC",
+  "woacc_request_message": "Ciao Fabio, vorrei collegare il mio WOACC Tracker EVO al WOACC globale. Indirizzo tracker da aggiungere: "
+}

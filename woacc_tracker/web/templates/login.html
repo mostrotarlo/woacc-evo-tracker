@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="it">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Login - WOACC Tracker</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body class="login-body">
+  <form class="login-card" method="post">
+    <h1>{{ cfg.community_name }}</h1>
+    <p>Accesso protetto</p>
+    {% with messages = get_flashed_messages() %}{% if messages %}<div class="alert">{{ messages[0] }}</div>{% endif %}{% endwith %}
+    <input type="password" name="password" placeholder="Password" autofocus>
+    <button type="submit">Entra</button>
+  </form>
+</body>
+</html>

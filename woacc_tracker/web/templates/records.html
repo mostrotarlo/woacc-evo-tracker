@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head"><h1>Record evento</h1><p>Record aperti dalle spunte “Annuncia record” sulle cartelle monitorate.</p></div>
+<section class="panel"><table><thead><tr><th>Sorgente</th><th>Pista</th><th>Da</th><th>Record</th><th>Pilota</th><th>Auto</th><th>Aggiornato</th></tr></thead><tbody>
+{% for r in rows %}
+<tr class="clickable" data-href="{{ url_for('session_detail', session_id=r.session_id) if r.session_id else '#' }}"><td>{{ r.source_name }}</td><td>{{ r.track_name }}{% if r.track_layout %} / {{ r.track_layout }}{% endif %}</td><td>{{ r.window_started_at }}</td><td><strong>{{ r.best_lap_ms|lap_time }}</strong></td><td>{{ r.driver_name or '—' }}</td><td>{{ r.car_name or '—' }}</td><td>{{ r.updated_at or '—' }}</td></tr>
+{% else %}<tr><td colspan="7" class="empty">Nessun record evento attivo.</td></tr>{% endfor %}
+</tbody></table></section>
+{% endblock %}
