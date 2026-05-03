@@ -83,6 +83,14 @@ Discord: **Fabio / WOACC**
 
 ---
 
+## ❤️ Support
+
+💰 [Donate via PayPal](https://www.paypal.com/donate/?business=7AVK9RRTQHSNJ&no_recurring=1&currency_code=EUR)
+
+Every contribution helps improve the project and add new features 🚀
+
+---
+
 ## 📄 License
 
 MIT License
