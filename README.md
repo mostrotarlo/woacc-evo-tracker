@@ -73,6 +73,8 @@ Join from inside the app → **WOACC section**
 * Sharing optional
 * Community page local-only
 
+Every contribution helps improve the project and add new features 🚀
+
 ---
 
 ## 📬 Contact
