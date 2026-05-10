@@ -6,6 +6,8 @@ from .database import Database
 from .parser import parse_evo_results, file_sha256
 from .records_discord import post_discord_record, post_discord_weekly_recap
 from .utils import normalize_text
+from .config import load_config
+from .translations import DEFAULT_LANGUAGE
 
 
 class Importer:
@@ -14,6 +16,12 @@ class Importer:
         self.log = log
         self.db.init_schema()
         self.pending_record_candidates = {}
+
+    def _notification_language(self) -> str:
+        try:
+            return (load_config().get("language") or DEFAULT_LANGUAGE).strip().lower()
+        except Exception:
+            return DEFAULT_LANGUAGE
 
     def ensure_source(self, folder: Path, name: str, source_cfg: Optional[Dict] = None) -> int:
         source_cfg = source_cfg or {}
@@ -473,6 +481,7 @@ class Importer:
                 r["session_type"],
                 r["session_datetime"],
                 old_lap,
+                self._notification_language(),
             )
 
             self.db.execute(
@@ -574,6 +583,7 @@ class Importer:
                 period_start,
                 period_end,
                 records,
+                self._notification_language(),
             )
 
             self.db.execute(

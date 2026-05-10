@@ -4,16 +4,22 @@ import urllib.request
 from typing import Optional, List, Dict, Any
 
 from .utils import ms_to_time
+from .translations import DEFAULT_LANGUAGE, load_vocabulary
 
 
-def _post_discord(webhook_url: str, payload: Dict[str, Any]) -> tuple[bool, str]:
+def _tr(lang: str, key: str, default: str) -> str:
+    vocab = load_vocabulary((lang or DEFAULT_LANGUAGE).lower())
+    return str(vocab.get(key, default))
+
+
+def _post_discord(webhook_url: str, payload: Dict[str, Any], lang: str = DEFAULT_LANGUAGE) -> tuple[bool, str]:
     webhook_url = (webhook_url or "").strip()
 
     if not webhook_url:
-        return False, "webhook mancante"
+        return False, _tr(lang, "discord_missing_webhook", "missing webhook")
 
     if not webhook_url.startswith("https://discord.com/api/webhooks/"):
-        return False, "webhook non valido"
+        return False, _tr(lang, "discord_invalid_webhook", "invalid webhook")
 
     data = json.dumps(payload).encode("utf-8")
 
@@ -31,7 +37,7 @@ def _post_discord(webhook_url: str, payload: Dict[str, Any]) -> tuple[bool, str]
         with urllib.request.urlopen(req, timeout=15) as resp:
             code = getattr(resp, "status", resp.getcode())
             if 200 <= code < 300:
-                return True, "annunciato"
+                return True, _tr(lang, "discord_announced", "announced")
             return False, f"Discord HTTP {code}"
 
     except urllib.error.HTTPError as e:
@@ -55,29 +61,32 @@ def post_discord_record(
     session_type: str,
     session_datetime: str,
     old_lap_ms: Optional[int] = None,
+    lang: str = DEFAULT_LANGUAGE,
 ) -> tuple[bool, str]:
 
-    title = "🏁 Primo record evento" if old_lap_ms is None else "🚀 Nuovo record pista"
+    track_label = f"{track_name}{(' / ' + track_layout) if track_layout else ''}"
+    title = _tr(lang, "discord_first_record_title", "🏁 First event record") if old_lap_ms is None else _tr(lang, "discord_new_record_title", "🚀 New track record")
 
-    description = (
-        f"**{driver_name}** ha segnato un nuovo riferimento su "
-        f"**{track_name}{(' / ' + track_layout) if track_layout else ''}**"
-    )
+    description = _tr(
+        lang,
+        "discord_record_description",
+        "**{driver}** set a new benchmark on **{track}**"
+    ).format(driver=driver_name, track=track_label)
 
     fields = [
-        {"name": "Evento", "value": announce_name or "WOACC Tracker", "inline": False},
-        {"name": "Pista", "value": f"{track_name}{(' / ' + track_layout) if track_layout else ''}", "inline": True},
-        {"name": "Tempo", "value": f"**{ms_to_time(lap_ms)}**", "inline": True},
-        {"name": "Pilota", "value": driver_name or "—", "inline": True},
-        {"name": "Auto", "value": car_name or "—", "inline": True},
-        {"name": "Sessione", "value": session_type or "—", "inline": True},
-        {"name": "Data", "value": session_datetime or "—", "inline": True},
+        {"name": _tr(lang, "discord_event", "Event"), "value": announce_name or "WOACC Tracker", "inline": False},
+        {"name": _tr(lang, "discord_track", "Track"), "value": track_label, "inline": True},
+        {"name": _tr(lang, "discord_time", "Time"), "value": f"**{ms_to_time(lap_ms)}**", "inline": True},
+        {"name": _tr(lang, "discord_driver", "Driver"), "value": driver_name or "—", "inline": True},
+        {"name": _tr(lang, "discord_car", "Car"), "value": car_name or "—", "inline": True},
+        {"name": _tr(lang, "discord_session", "Session"), "value": session_type or "—", "inline": True},
+        {"name": _tr(lang, "discord_date", "Date"), "value": session_datetime or "—", "inline": True},
     ]
 
     if old_lap_ms:
         improvement = old_lap_ms - lap_ms
-        fields.append({"name": "Record precedente", "value": ms_to_time(old_lap_ms), "inline": True})
-        fields.append({"name": "Miglioramento", "value": f"-{improvement / 1000:.3f}s", "inline": True})
+        fields.append({"name": _tr(lang, "discord_previous_record", "Previous record"), "value": ms_to_time(old_lap_ms), "inline": True})
+        fields.append({"name": _tr(lang, "discord_improvement", "Improvement"), "value": f"-{improvement / 1000:.3f}s", "inline": True})
 
     payload = {
         "username": "WOACC Tracker",
@@ -94,7 +103,7 @@ def post_discord_record(
         ]
     }
 
-    return _post_discord(webhook_url, payload)
+    return _post_discord(webhook_url, payload, lang)
 
 
 def post_discord_weekly_recap(
@@ -103,10 +112,11 @@ def post_discord_weekly_recap(
     period_start: str,
     period_end: str,
     records: List[Dict[str, Any]],
+    lang: str = DEFAULT_LANGUAGE,
 ) -> tuple[bool, str]:
 
     if not records:
-        return False, "nessun record da riepilogare"
+        return False, _tr(lang, "discord_no_records_recap", "no records to recap")
 
     lines = []
 
@@ -123,19 +133,19 @@ def post_discord_weekly_recap(
 
     extra = ""
     if len(records) > 20:
-        extra = f"\n\nAltri record non mostrati: **{len(records) - 20}**"
+        extra = "\n\n" + _tr(lang, "discord_more_records", "Other records not shown: **{count}**").format(count=len(records) - 20)
 
     payload = {
         "username": "WOACC Tracker",
         "embeds": [
             {
-                "title": "📊 Recap settimanale record",
+                "title": _tr(lang, "discord_weekly_recap_title", "📊 Weekly record recap"),
                 "description": "\n\n".join(lines) + extra,
                 "color": 5814783,
                 "fields": [
-                    {"name": "Evento", "value": announce_name or "WOACC Tracker", "inline": True},
-                    {"name": "Periodo", "value": f"{period_start} → {period_end}", "inline": False},
-                    {"name": "Record rilevati", "value": str(len(records)), "inline": True},
+                    {"name": _tr(lang, "discord_event", "Event"), "value": announce_name or "WOACC Tracker", "inline": True},
+                    {"name": _tr(lang, "discord_period", "Period"), "value": f"{period_start} → {period_end}", "inline": False},
+                    {"name": _tr(lang, "discord_records_detected", "Records detected"), "value": str(len(records)), "inline": True},
                 ],
                 "footer": {
                     "text": "WOACC Tracker • Weekly Record Recap"
@@ -144,4 +154,4 @@ def post_discord_weekly_recap(
         ]
     }
 
-    return _post_discord(webhook_url, payload)
+    return _post_discord(webhook_url, payload, lang)

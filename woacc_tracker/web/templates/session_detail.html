@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-head"><a href="{{ url_for('server_detail', server_id=sess.server_id) }}">← Server</a><h1>{{ sess.session_type }} - {{ sess.track_name }}</h1><p>{{ sess.server_name }} · {{ sess.session_datetime }}</p><p>Piloti: {{ sess.drivers_count }} · Giri: {{ sess.laps_total }} · Best: {{ sess.best_lap_ms|lap_time }}</p></div>
-<section class="panel"><h2>{% if sess.session_type|lower == 'race' %}Ordine d'arrivo{% else %}Classifica tempi{% endif %}</h2><table class="entries"><thead><tr><th>Pos</th><th>{{ t('driver') }}</th><th>{{ t('category') }}</th><th>{{ t('car') }}</th><th>{{ t('laps') }}</th>{% if sess.session_type|lower == 'race' %}<th>Gap/Stato</th><th>Best lap</th>{% else %}<th>Best lap</th><th>Gap</th>{% endif %}</tr></thead><tbody>
+<div class="page-head"><a href="{{ url_for('server_detail', server_id=sess.server_id) }}">{{ t('back_servers') }}</a><h1>{{ sess.session_type }} - {{ sess.track_name }}</h1><p>{{ sess.server_name }} · {{ sess.session_datetime }}</p><p>{{ t('drivers') }}: {{ sess.drivers_count }} · {{ t('laps') }}: {{ sess.laps_total }} · {{ t('best_lap') }}: {{ sess.best_lap_ms|lap_time }}</p></div>
+<section class="panel"><h2>{% if sess.session_type|lower == 'race' %}{{ t('race_result') }}{% else %}{{ t('time_leaderboard') }}{% endif %}</h2><table class="entries"><thead><tr><th>{{ t('position') }}</th><th>{{ t('driver') }}</th><th>{{ t('category') }}</th><th>{{ t('car') }}</th><th>{{ t('laps') }}</th>{% if sess.session_type|lower == 'race' %}<th>{{ t('gap_status') }}</th><th>{{ t('best_lap') }}</th>{% else %}<th>{{ t('best_lap') }}</th><th>{{ t('gap') }}</th>{% endif %}</tr></thead><tbody>
 {% for e in entries %}
-<tr class="entry-row" data-entry="{{ e.id }}"><td>{{ e.position or '—' }}</td><td><strong>{{ e.display_name }}</strong>{% if e.nation %}<span class="muted"> {{ e.nation }}</span>{% endif %}</td><td>{% if e.driver_category %}<span class="badge category">{{ e.driver_category }}</span>{% else %}{{ t('none') }}{% endif %}</td><td>{{ e.car_name }}</td><td>{{ e.laps_total }} ({{ e.laps_valid }})</td>{% if sess.session_type|lower == 'race' %}<td>{% if e.gap_ms %}{{ e.gap_ms|gap }}{% else %}{{ e.status or '—' }}{% endif %}</td><td>{{ e.best_lap_ms|lap_time }}</td>{% else %}<td><strong>{{ e.best_lap_ms|lap_time }}</strong></td><td>{{ e.gap_ms|gap }}</td>{% endif %}</tr>
+<tr class="entry-row" data-entry="{{ e.id }}"><td>{{ e.position or t('none') }}</td><td><strong>{{ e.display_name }}</strong>{% if e.nation %}<span class="muted"> {{ e.nation }}</span>{% endif %}</td><td>{% if e.driver_category %}<span class="badge category">{{ e.driver_category }}</span>{% else %}{{ t('none') }}{% endif %}</td><td>{{ e.car_name }}</td><td>{{ e.laps_total }} ({{ e.laps_valid }})</td>{% if sess.session_type|lower == 'race' %}<td>{% if e.gap_ms %}{{ e.gap_ms|gap }}{% else %}{{ e.status or t('none') }}{% endif %}</td><td>{{ e.best_lap_ms|lap_time }}</td>{% else %}<td><strong>{{ e.best_lap_ms|lap_time }}</strong></td><td>{{ e.gap_ms|gap }}</td>{% endif %}</tr>
 <tr class="laps-row" id="laps-{{ e.id }}"><td colspan="7"><div class="laps-box"><h3>{{ e.display_name }} — {{ e.car_name }}</h3>
   <div class="mini-stats">
-    <div><span>Best lap</span><strong>{{ e.best_lap_ms|lap_time }}</strong></div>
-    <div><span>Giro potenziale</span><strong>{{ e.potential_lap_ms|lap_time }}</strong></div>
-    <div><span>Media validi</span><strong>{{ e.avg_valid_lap_ms|lap_time }}</strong></div>
-    <div><span>Media tutti</span><strong>{{ e.avg_all_lap_ms|lap_time }}</strong></div>
-    <div><span>Giri</span><strong>{{ e.laps_total }} ({{ e.laps_valid }})</strong></div>
+    <div><span>{{ t('best_lap') }}</span><strong>{{ e.best_lap_ms|lap_time }}</strong></div>
+    <div><span>{{ t('potential_lap') }}</span><strong>{{ e.potential_lap_ms|lap_time }}</strong></div>
+    <div><span>{{ t('avg_valid') }}</span><strong>{{ e.avg_valid_lap_ms|lap_time }}</strong></div>
+    <div><span>{{ t('avg_all') }}</span><strong>{{ e.avg_all_lap_ms|lap_time }}</strong></div>
+    <div><span>{{ t('laps') }}</span><strong>{{ e.laps_total }} ({{ e.laps_valid }})</strong></div>
   </div>
-  <table><thead><tr><th>Giro</th><th>Tempo</th><th>Valido</th><th>S1</th><th>S2</th><th>S3</th></tr></thead><tbody>{% for l in laps_by_entry[e.id] %}<tr class="{% if l.is_valid %}valid{% else %}invalid{% endif %}"><td>{{ l.lap_number }}</td><td>{{ l.lap_time_ms|lap_time }}</td><td>{% if l.is_valid %}✅ Valido{% else %}❌ Non valido{% endif %} <span class="muted">flags {{ l.flags }}</span></td><td>{{ l.s1_ms|lap_time }}</td><td>{{ l.s2_ms|lap_time }}</td><td>{{ l.s3_ms|lap_time }}</td></tr>{% else %}<tr><td colspan="7" class="empty">Nessun giro.</td></tr>{% endfor %}</tbody></table></div></td></tr>
-{% else %}<tr><td colspan="7" class="empty">Nessun pilota.</td></tr>{% endfor %}
+  <table><thead><tr><th>{{ t('lap') }}</th><th>{{ t('time') }}</th><th>{{ t('valid') }}</th><th>S1</th><th>S2</th><th>S3</th></tr></thead><tbody>{% for l in laps_by_entry[e.id] %}<tr class="{% if l.is_valid %}valid{% else %}invalid{% endif %}"><td>{{ l.lap_number }}</td><td>{{ l.lap_time_ms|lap_time }}</td><td>{% if l.is_valid %}✅ {{ t('valid') }}{% else %}❌ {{ t('invalid') }}{% endif %} <span class="muted">flags {{ l.flags }}</span></td><td>{{ l.s1_ms|lap_time }}</td><td>{{ l.s2_ms|lap_time }}</td><td>{{ l.s3_ms|lap_time }}</td></tr>{% else %}<tr><td colspan="7" class="empty">{{ t('no_laps') }}</td></tr>{% endfor %}</tbody></table></div></td></tr>
+{% else %}<tr><td colspan="7" class="empty">{{ t('no_driver') }}</td></tr>{% endfor %}
 </tbody></table></section>
 {% endblock %}
