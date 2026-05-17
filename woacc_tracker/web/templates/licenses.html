@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('licenses', 'Licenze') }}</h1>
+  <p>{{ t('licenses_intro', 'Classifica licenze e ultime licenze conseguite. Lo SteamID resta interno e non viene mostrato.') }}</p>
+</div>
+
+<section class="panel">
+  <form method="get" class="filters">
+    <input type="text" name="q" value="{{ q }}" placeholder="{{ t('search_driver_placeholder', 'Cerca pilota...') }}">
+    <select name="mode">
+      <option value="ranking" {% if mode == 'ranking' %}selected{% endif %}>{{ t('ranking', 'Classifica') }}</option>
+      <option value="latest" {% if mode == 'latest' %}selected{% endif %}>{{ t('latest_licenses', 'Ultime licenze') }}</option>
+    </select>
+    <button class="btn" type="submit">{{ t('search', 'Cerca') }}</button>
+    <a class="btn secondary" href="{{ url_for('licenses_page') }}">{{ t('reset', 'Reset') }}</a>
+  </form>
+</section>
+
+{% if mode == 'latest' %}
+<section class="panel">
+  <h2>{{ t('latest_licenses', 'Ultime licenze') }}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t('date', 'Data') }}</th>
+        <th>{{ t('driver', 'Pilota') }}</th>
+        <th>{{ t('license', 'Licenza') }}</th>
+        <th>{{ t('time', 'Tempo') }}</th>
+        <th>{{ t('track', 'Pista') }}</th>
+        <th>{{ t('session', 'Sessione') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in latest %}
+      <tr class="clickable" onclick="window.location='{{ url_for('session_detail', session_id=r.session_id) }}'">
+        <td>{{ r.updated_at }}</td>
+        <td>{{ r.driver_name }}</td>
+        <td><span class="badge">{{ r.license_name }}</span></td>
+        <td>{{ r.best_time_ms|lap_time }}</td>
+        <td>{{ r.track_name or '—' }}</td>
+        <td>{{ r.session_type or '—' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="empty">{{ t('no_licenses_found', 'Nessuna licenza trovata') }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<section class="panel">
+  <h2>{{ t('ranking', 'Classifica') }}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t('position_short', 'POS') }}</th>
+        <th>{{ t('driver', 'Pilota') }}</th>
+        <th>{{ t('license', 'Licenza') }}</th>
+        <th>{{ t('best_time', 'Best time') }}</th>
+        <th>{{ t('track', 'Pista') }}</th>
+        <th>{{ t('session', 'Sessione') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in ranking %}
+      <tr class="clickable" onclick="window.location='{{ url_for('session_detail', session_id=r.session_id) }}'">
+        <td>{{ loop.index }}</td>
+        <td>{{ r.driver_name }}</td>
+        <td><span class="badge">{{ r.license_name }}</span></td>
+        <td>{{ r.best_time_ms|lap_time }}</td>
+        <td>{{ r.track_name or '—' }}</td>
+        <td>{{ r.session_type or '—' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="empty">{{ t('no_licenses_found', 'Nessuna licenza trovata') }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<style>
+.clickable { cursor: pointer; }
+.clickable:hover { background: var(--card2); }
+.filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.filters input { min-width:260px; }
+</style>
+{% endblock %}

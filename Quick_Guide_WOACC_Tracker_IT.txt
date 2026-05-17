@@ -1,0 +1,263 @@
+WOACC EVO Tracker – Guida Rapida Installazione e Accesso Remoto (v13.2 Social)
+
+1. Avviare il Tracker
+
+Avviare WOACC Tracker tramite l'eseguibile.
+
+Una volta aperta l'applicazione comparirà la schermata principale.
+
+Impostazioni consigliate:
+
+- Porta Web App: 5055
+- Attivare: Accesso remoto / LAN
+- Facoltativo: impostare password di accesso
+
+Premere:
+
+Salva impostazioni
+Avvia Tracker
+
+
+2. Configurare le Cartelle Monitorate
+
+Il tracker deve sapere dove il Dedicated Server EVO salva i file JSON delle sessioni.
+
+Premere:
+
+Aggiungi cartella
+
+e selezionare:
+
+cartella results del Dedicated Server EVO
+
+Funzioni supportate:
+
+Practice: Sì
+Qualify: Sì
+Race: Sì
+Leaderboard: Sì
+Statistiche piloti: Sì
+
+
+3. Setup Discord (Opzionale)
+
+WOACC Tracker può inviare notifiche Discord automatiche tramite Webhook.
+
+Funzioni disponibili:
+
+- Record
+- Weekly recap
+- Nuove sessioni
+- Sistema Licenze
+
+Come creare un Webhook Discord:
+
+1. Aprire Discord
+2. Entrare nelle impostazioni del canale desiderato
+3. Aprire:
+
+Integrazioni → Webhook
+
+4. Creare un nuovo Webhook
+5. Copiare l'URL del Webhook
+
+Nel tracker:
+
+- selezionare una cartella monitorata
+- premere Setup Discord
+- configurare le opzioni desiderate
+- salvare
+
+
+RECORDS
+
+Permette di inviare automaticamente un messaggio Discord quando viene stabilito un nuovo record.
+
+Funzioni:
+
+- Attiva/disattiva record
+- Webhook dedicato
+- Nome evento/server personalizzato
+- Reset storico record
+
+Messaggio esempio:
+
+🏆 Nuovo Record
+
+Evento: FMP SERVER 1
+
+Pilota: Fabio
+Pista: Imola
+Tempo: 1:43.221
+
+
+WEEKLY RECAP
+
+Invia automaticamente un riepilogo settimanale dei record.
+
+Informazioni mostrate:
+
+- Pilota
+- Pista
+- Tempo record
+
+Messaggio esempio:
+
+🏆 Weekly Record Recap
+
+Imola
+Fabio
+1:43.221
+
+Spa
+Marco
+2:15.334
+
+Monza
+Luca
+1:46.500
+
+
+SESSIONS
+
+Permette di notificare automaticamente nuove sessioni disponibili.
+
+È possibile utilizzare un Webhook dedicato.
+
+Modalità disponibili:
+
+Simple
+
+Invia:
+
+📢 Nuove sessioni disponibili
+
+https://woacc.zapto.org/tracker
+
+
+Detailed
+
+Practice:
+
+📢 Nuova sessione Practice disponibile
+
+
+Qualifica:
+
+🏁 Qualifica conclusa
+
+P1 Fabio
+1:43.221
+
+P2 Marco
+1:43.533
+
+P3 Luca
+1:44.012
+
+
+Race:
+
+🏁 Gara conclusa
+
+P1 Fabio
+
+P2 Marco
+
+P3 Luca
+
+
+LICENSES
+
+Permette di configurare:
+
+- da 1 a 3 soglie
+- nomi personalizzati
+
+Esempio:
+
+AM        1:48.000
+SILVER    1:45.000
+PRO       1:43.000
+
+
+4. Tema Web (Opzionale)
+
+È possibile personalizzare:
+
+- Colori
+- Font
+- Aspetto della web app
+
+
+5. Sistema Licenze
+
+WOACC Tracker include un sistema licenze automatico basato sul tempo realizzato dai piloti.
+
+Funzioni disponibili:
+
+- Ultime licenze ottenute
+- Classifica licenze
+- Ricerca pilota
+- Click sul pilota → apertura sessione
+
+Regole:
+
+Una licenza viene notificata una sola volta per livello.
+
+Esempio:
+
+Fabio
+
+1:47.500 → AM
+
+1:47.200 → nessuna notifica
+
+1:44.900 → SILVER
+
+1:43.100 → PRO
+
+Lo SteamID viene utilizzato internamente ma non viene mostrato nell'interfaccia.
+
+
+6. Accesso Locale
+
+Locale:
+http://127.0.0.1:5055
+
+LAN:
+http://192.168.x.x:5055
+
+
+7. Accesso da Internet (Senza Caddy)
+
+Per consentire l'accesso remoto:
+
+1. Aprire porta 5055 nel firewall Windows
+2. Aprire porta 5055 nel router tramite Port Forwarding
+3. Utilizzare IP pubblico o DDNS
+
+Servizi supportati:
+
+- No-IP
+- DuckDNS
+- Zapto
+
+
+8. Verifica Funzionamento
+
+Dopo aver aperto la porta:
+
+- avviare il tracker
+- generare una sessione EVO
+- verificare import JSON
+- aprire il tracker da un altro dispositivo
+
+
+WOACC EVO Tracker è un progetto gratuito community-made.
+
+GitHub:
+https://github.com/mostrotarlo/woacc-evo-tracker
+
+Demo Live:
+https://woacc.zapto.org/tracker

@@ -30,6 +30,7 @@
     <a href="{{ url_for('sessions_page') }}">{{ t('sessions') }}</a>
     <a href="{{ url_for('leaderboard') }}">{{ t('leaderboard') }}</a>
     <a href="{{ url_for('records') }}">{{ t('records') }}</a>
+    <a href="{{ url_for('licenses_page') }}">{{ t('licenses', 'Licenze') }}</a>
     <a href="{{ url_for('woacc_community') }}">WOACC</a>
     <a href="{{ url_for('logs') }}">{{ t('logs') }}</a>
     {% if cfg.password_enabled %}<a href="{{ url_for('logout') }}">{{ t('logout') }}</a>{% endif %}

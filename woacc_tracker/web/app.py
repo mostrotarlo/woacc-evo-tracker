@@ -2,6 +2,7 @@ from functools import wraps
 from typing import Any, Dict
 from pathlib import Path
 import ipaddress
+from woacc_tracker.core.importer import Importer
 
 from flask import Flask, abort, flash, jsonify, make_response, redirect, render_template, request, send_file, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -406,11 +407,80 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         )
         return render_template("records.html", cfg=cfg, rows=rows)
 
+
+
+    @app.route("/licenses")
+    @login_required
+    def licenses_page():
+        q = (request.args.get("q") or "").strip().lower()
+        mode = (request.args.get("mode") or "ranking").strip().lower()
+        clauses = []
+        params = []
+        if q:
+            clauses.append("lower(driver_name) LIKE ?")
+            params.append(f"%{q}%")
+        where = "WHERE " + " AND ".join(clauses) if clauses else ""
+
+        ranking = db.query(
+            f"""SELECT la.*, sess.session_type, sess.session_datetime, srv.track_name, srv.server_name
+                FROM license_achievements la
+                LEFT JOIN sessions sess ON sess.id=la.session_id
+                LEFT JOIN servers srv ON srv.id=sess.server_id
+                {where}
+                ORDER BY la.license_rank DESC, la.best_time_ms ASC, la.driver_name ASC""",
+            tuple(params),
+        )
+        latest = db.query(
+            f"""SELECT la.*, sess.session_type, sess.session_datetime, srv.track_name, srv.server_name
+                FROM license_achievements la
+                LEFT JOIN sessions sess ON sess.id=la.session_id
+                LEFT JOIN servers srv ON srv.id=sess.server_id
+                {where}
+                ORDER BY la.updated_at DESC
+                LIMIT 100""",
+            tuple(params),
+        )
+        return render_template("licenses.html", cfg=cfg, q=q, mode=mode, ranking=ranking, latest=latest)
+
     @app.route("/logs")
     @login_required
     def logs():
         rows = db.query("SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 300")
         return render_template("logs.html", cfg=cfg, rows=rows)
+
+    @app.route("/logs/retry/<int:file_id>", methods=["POST"])
+    @login_required
+    def retry_import_file(file_id: int):
+        row = db.one("SELECT * FROM import_files WHERE id=?", (file_id,))
+        if not row:
+            flash("File log non trovato")
+            return redirect(url_for("logs"))
+
+        file_path = Path(row["file_path"])
+        source_id = row["source_id"]
+
+        if not file_path.exists():
+            flash(f"File non trovato: {file_path}")
+            return redirect(url_for("logs"))
+
+        # Rimuove il vecchio record del log per forzare la rilettura.
+        # L'importer normalmente salta i file già presenti tramite file_hash.
+        db.execute("DELETE FROM import_files WHERE id=?", (file_id,))
+
+        importer = Importer(db, log=print)
+        result = importer.import_file(file_path, source_id)
+
+        if result == "imported":
+            flash("Rilettura forzata completata: importato correttamente")
+        elif result == "skipped":
+            flash("Rilettura forzata completata: file saltato. Controlla il motivo nei log.")
+        elif result == "error":
+            flash("Rilettura forzata completata: ERRORE. Apri i log per vedere il dettaglio completo.")
+        else:
+            flash(f"Rilettura forzata completata: {result}")
+
+        return redirect(url_for("logs"))
+
 
     @app.route("/woacc-community")
     @login_required

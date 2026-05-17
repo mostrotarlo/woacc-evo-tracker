@@ -1,13 +1,17 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Optional
+import json
 
 from .database import Database
 from .parser import parse_evo_results, file_sha256
 from .records_discord import post_discord_record, post_discord_weekly_recap
+from .discord_notifications import post_session_notification
+from .licenses import process_license_notifications
 from .utils import normalize_text
 from .config import load_config
 from .translations import DEFAULT_LANGUAGE
+import traceback
 
 
 class Importer:
@@ -38,6 +42,17 @@ class Importer:
         weekly_recap_enabled = 1 if source_cfg.get("weekly_recap_enabled") else 0
         weekly_recap_started_at = source_cfg.get("weekly_recap_started_at") or None
 
+        session_notify_enabled = 1 if source_cfg.get("session_notify_enabled") else 0
+        session_notify_webhook_url = (source_cfg.get("session_notify_webhook_url") or "").strip()
+        session_notify_mode = source_cfg.get("session_notify_mode") or "simple"
+        session_notify_started_at = source_cfg.get("session_notify_started_at") or None
+
+        license_enabled = 1 if source_cfg.get("license_enabled") else 0
+        license_webhook_url = (source_cfg.get("license_webhook_url") or "").strip()
+        license_levels = source_cfg.get("license_levels") or []
+        license_levels_json = json.dumps(license_levels, ensure_ascii=False)
+        license_started_at = source_cfg.get("license_started_at") or None
+
         if row:
             self.db.execute(
                 """UPDATE import_sources
@@ -49,7 +64,15 @@ class Importer:
                        discord_webhook_url=?,
                        record_window_started_at=?,
                        weekly_recap_enabled=?,
-                       weekly_recap_started_at=?
+                       weekly_recap_started_at=?,
+                       session_notify_enabled=?,
+                       session_notify_webhook_url=?,
+                       session_notify_mode=?,
+                       session_notify_started_at=?,
+                       license_enabled=?,
+                       license_webhook_url=?,
+                       license_levels_json=?,
+                       license_started_at=?
                    WHERE id=?""",
                 (
                     name,
@@ -60,6 +83,14 @@ class Importer:
                     window,
                     weekly_recap_enabled,
                     weekly_recap_started_at,
+                    session_notify_enabled,
+                    session_notify_webhook_url,
+                    session_notify_mode,
+                    session_notify_started_at,
+                    license_enabled,
+                    license_webhook_url,
+                    license_levels_json,
+                    license_started_at,
                     row["id"],
                 ),
             )
@@ -76,9 +107,17 @@ class Importer:
                 discord_webhook_url,
                 record_window_started_at,
                 weekly_recap_enabled,
-                weekly_recap_started_at
+                weekly_recap_started_at,
+                session_notify_enabled,
+                session_notify_webhook_url,
+                session_notify_mode,
+                session_notify_started_at,
+                license_enabled,
+                license_webhook_url,
+                license_levels_json,
+                license_started_at
             )
-            VALUES(?,?,1,?,?,?,?,?,?,?)""",
+            VALUES(?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 name,
                 str(folder),
@@ -89,6 +128,14 @@ class Importer:
                 window,
                 weekly_recap_enabled,
                 weekly_recap_started_at,
+                session_notify_enabled,
+                session_notify_webhook_url,
+                session_notify_mode,
+                session_notify_started_at,
+                license_enabled,
+                license_webhook_url,
+                license_levels_json,
+                license_started_at,
             ),
         )
         return int(cur.lastrowid)
@@ -148,6 +195,8 @@ class Importer:
             )
 
             self._check_and_announce_records(source_id, parsed, session_id)
+            self._check_and_announce_session(source_id, parsed, session_id)
+            self._check_and_announce_licenses(source_id, session_id)
 
             return "imported"
 
@@ -159,7 +208,7 @@ class Importer:
 
             self.db.execute(
                 "INSERT OR IGNORE INTO import_files(file_path,file_hash,source_id,status,reason,imported_at) VALUES(?,?,?,?,?,?)",
-                (str(path), fhash, source_id, "error", str(exc), now),
+                (str(path), fhash, source_id, "error", traceback.format_exc(), now),
             )
 
             return "error"
@@ -304,6 +353,68 @@ class Importer:
                 )
 
         return session_id
+
+
+    def _check_and_announce_session(self, source_id: Optional[int], parsed: Dict, session_id: int) -> None:
+        if not source_id:
+            return
+        src = self.db.one("SELECT * FROM import_sources WHERE id=?", (source_id,))
+        if not src or not src["session_notify_enabled"]:
+            return
+        webhook = (src["session_notify_webhook_url"] or "").strip()
+        if not webhook:
+            self.log(f"Session notify skip: webhook mancante per {src['name']}")
+            return
+
+        already = self.db.one(
+            """SELECT id FROM notification_history
+               WHERE notification_type='session' AND source_id=? AND session_id=? AND event_key='available'""",
+            (source_id, session_id),
+        )
+        if already:
+            return
+
+        stype = parsed.get("session_type") or "Session"
+        detailed = (src["session_notify_mode"] or "simple") == "detailed"
+        top_rows = []
+        if detailed and stype.lower() in {"qualify", "qualifying", "q", "race", "r"}:
+            top_rows = [dict(r) for r in self.db.query(
+                """SELECT d.display_name AS driver_name, se.car_name, se.best_lap_ms
+                   FROM session_entries se
+                   JOIN drivers d ON d.id=se.driver_id
+                   WHERE se.session_id=? AND se.best_lap_ms IS NOT NULL
+                   ORDER BY se.best_lap_ms ASC
+                   LIMIT 3""",
+                (session_id,),
+            )]
+
+        ok, msg = post_session_notification(
+            webhook,
+            src["announce_name"] or src["name"],
+            session_id,
+            stype,
+            parsed.get("server_name") or src["name"],
+            parsed.get("track_name") or "",
+            parsed.get("session_datetime") or "",
+            top_rows,
+            detailed,
+            self._notification_language(),
+        )
+        now = datetime.now().isoformat(timespec="seconds")
+        self.db.execute(
+            """INSERT OR IGNORE INTO notification_history(notification_type, source_id, session_id, event_key, sent_at, discord_status)
+               VALUES('session',?,?,?,?,?)""",
+            (source_id, session_id, "available", now, msg),
+        )
+        self.log(f"Sessione annunciata {session_id}: Discord {msg}")
+
+    def _check_and_announce_licenses(self, source_id: Optional[int], session_id: int) -> None:
+        if not source_id:
+            return
+        src = self.db.one("SELECT * FROM import_sources WHERE id=?", (source_id,))
+        if not src:
+            return
+        process_license_notifications(self.db, source_id, session_id, dict(src), self._notification_language(), self.log)
 
     def _check_and_announce_records(self, source_id: Optional[int], parsed: Dict, session_id: int) -> None:
         if not source_id:

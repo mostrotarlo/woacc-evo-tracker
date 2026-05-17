@@ -120,20 +120,20 @@ def post_discord_weekly_recap(
 
     lines = []
 
-    for idx, r in enumerate(records[:20], start=1):
+    for idx, r in enumerate(records[:40], start=1):
         track = r.get("track_name") or "Unknown track"
         layout = r.get("track_layout") or ""
         track_label = f"{track}{(' / ' + layout) if layout else ''}"
 
         lines.append(
             f"**{idx}. {track_label}**\n"
-            f"🏎️ {r.get('driver_name') or '—'} — {r.get('car_name') or '—'}\n"
-            f"⏱️ **{ms_to_time(int(r.get('lap_ms') or 0))}** · {r.get('session_type') or '—'} · {r.get('session_datetime') or '—'}"
+            f"👤 {r.get('driver_name') or '—'}\n"
+            f"⏱️ **{ms_to_time(int(r.get('lap_ms') or 0))}**"
         )
 
     extra = ""
-    if len(records) > 20:
-        extra = "\n\n" + _tr(lang, "discord_more_records", "Other records not shown: **{count}**").format(count=len(records) - 20)
+    if len(records) > 40:
+        extra = "\n\n" + _tr(lang, "discord_more_records", "Other records not shown: **{count}**").format(count=len(records) - 40)
 
     payload = {
         "username": "WOACC Tracker",

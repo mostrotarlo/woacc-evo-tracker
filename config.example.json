@@ -22,7 +22,28 @@
       "discord_webhook_url": "",
       "record_window_started_at": "",
       "weekly_recap_enabled": false,
-      "weekly_recap_started_at": ""
+      "weekly_recap_started_at": "",
+      "session_notify_enabled": false,
+      "session_notify_webhook_url": "",
+      "session_notify_mode": "simple",
+      "session_notify_started_at": "",
+      "license_enabled": false,
+      "license_webhook_url": "",
+      "license_started_at": "",
+      "license_levels": [
+        {
+          "name": "AM",
+          "time_ms": 110000
+        },
+        {
+          "name": "SILVER",
+          "time_ms": 107000
+        },
+        {
+          "name": "PRO",
+          "time_ms": 104000
+        }
+      ]
     }
   ],
   "theme": {

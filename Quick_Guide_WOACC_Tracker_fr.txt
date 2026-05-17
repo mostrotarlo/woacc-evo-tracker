@@ -1,0 +1,265 @@
+WOACC EVO Tracker – Guide Rapide d'Installation et d'Accès à Distance (v13.2 Social)
+
+1. Démarrer le Tracker
+
+Lancez WOACC Tracker à l’aide du fichier exécutable.
+
+Une fois démarré, la fenêtre principale apparaîtra.
+
+Paramètres recommandés :
+
+- Port de l'application Web : 5055
+- Activer : Accès distant / LAN
+- Facultatif : définir un mot de passe
+
+Ensuite appuyez sur :
+
+Enregistrer les paramètres
+Démarrer le Tracker
+
+
+2. Configurer les Dossiers Surveillés
+
+Le tracker doit connaître l’emplacement où le serveur dédié EVO enregistre les fichiers JSON des sessions.
+
+Appuyez sur :
+
+Ajouter un dossier
+
+et sélectionnez :
+
+Dossier results du serveur dédié EVO
+
+Fonctions prises en charge :
+
+Sessions Practice : Oui
+Sessions Qualify : Oui
+Sessions Race : Oui
+Classements : Oui
+Statistiques pilotes : Oui
+
+
+3. Configuration Discord (Optionnel)
+
+WOACC Tracker peut envoyer automatiquement des notifications Discord via Webhooks.
+
+Fonctions disponibles :
+
+- Records
+- Récapitulatif hebdomadaire
+- Nouvelles sessions
+- Système de licences
+
+Comment créer un Webhook Discord :
+
+1. Ouvrir Discord
+2. Ouvrir les paramètres du canal souhaité
+3. Ouvrir :
+
+Intégrations → Webhooks
+
+4. Créer un nouveau Webhook
+5. Copier l’URL du Webhook
+
+Dans le tracker :
+
+- sélectionner un dossier surveillé
+- appuyer sur Setup Discord
+- configurer les options souhaitées
+- enregistrer
+
+
+RECORDS
+
+Envoie automatiquement un message Discord lorsqu’un nouveau record est établi.
+
+Fonctions disponibles :
+
+- Activer/Désactiver les records
+- Webhook dédié
+- Nom personnalisé de l’événement/serveur
+- Réinitialisation de l’historique
+
+Exemple :
+
+🏆 Nouveau Record
+
+Événement : FMP SERVER 1
+
+Pilote : Fabio
+Circuit : Imola
+Temps : 1:43.221
+
+
+RÉCAPITULATIF HEBDOMADAIRE
+
+Envoie automatiquement un résumé hebdomadaire des records.
+
+Informations affichées :
+
+- Pilote
+- Circuit
+- Temps du record
+
+Exemple :
+
+🏆 Récapitulatif Hebdomadaire
+
+Imola
+Fabio
+1:43.221
+
+Spa
+Marco
+2:15.334
+
+Monza
+Luca
+1:46.500
+
+
+SESSIONS
+
+Permet d’envoyer automatiquement des notifications lorsqu’une nouvelle session est disponible.
+
+Un Webhook dédié peut être utilisé.
+
+Modes disponibles :
+
+Simple
+
+Envoie :
+
+📢 Nouvelles sessions disponibles
+
+https://woacc.zapto.org/tracker
+
+
+Détaillé
+
+Practice :
+
+📢 Nouvelle session Practice disponible
+
+
+Qualify :
+
+🏁 Qualification terminée
+
+P1 Fabio
+1:43.221
+
+P2 Marco
+1:43.533
+
+P3 Luca
+1:44.012
+
+
+Race :
+
+🏁 Course terminée
+
+P1 Fabio
+
+P2 Marco
+
+P3 Luca
+
+
+LICENCES
+
+Permet de configurer :
+
+- de 1 à 3 seuils
+- noms personnalisés
+
+Exemple :
+
+AM        1:48.000
+SILVER    1:45.000
+PRO       1:43.000
+
+
+4. Thème Web (Optionnel)
+
+Vous pouvez personnaliser :
+
+- Couleurs
+- Polices
+- Apparence de l'application Web
+
+
+5. Système de Licences
+
+WOACC Tracker inclut un système automatique de licences basé sur les temps réalisés.
+
+Fonctions disponibles :
+
+- Dernières licences obtenues
+- Classement des licences
+- Recherche de pilote
+- Clic sur un pilote → ouverture de la session associée
+
+Règles :
+
+Une notification n’est envoyée qu’une seule fois par niveau.
+
+Exemple :
+
+Fabio
+
+1:47.500 → AM
+
+1:47.200 → aucune notification
+
+1:44.900 → SILVER
+
+1:43.100 → PRO
+
+Le SteamID est utilisé en interne mais n’est jamais affiché dans l’interface Web.
+
+
+6. Accès Local
+
+Local :
+
+http://127.0.0.1:5055
+
+LAN :
+
+http://192.168.x.x:5055
+
+
+7. Accès Internet (Sans Caddy)
+
+Pour permettre l’accès à distance :
+
+1. Ouvrir le port 5055 dans le pare-feu Windows
+2. Ouvrir le port 5055 dans le routeur avec Port Forwarding
+3. Utiliser une adresse IP publique ou un service DDNS
+
+Services pris en charge :
+
+- No-IP
+- DuckDNS
+- Zapto
+
+
+8. Vérifier le Fonctionnement
+
+Après avoir ouvert le port :
+
+- démarrer le tracker
+- générer une session EVO
+- vérifier l’importation JSON
+- ouvrir le tracker depuis un autre appareil
+
+
+WOACC EVO Tracker est un projet gratuit créé par la communauté.
+
+GitHub :
+https://github.com/mostrotarlo/woacc-evo-tracker
+
+Démo Live :
+https://woacc.zapto.org/tracker

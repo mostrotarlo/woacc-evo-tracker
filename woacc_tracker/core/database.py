@@ -41,6 +41,16 @@ class Database:
         add("import_sources", "weekly_recap_enabled", "weekly_recap_enabled INTEGER NOT NULL DEFAULT 0")
         add("import_sources", "weekly_recap_started_at", "weekly_recap_started_at TEXT")
 
+        # Discord/session/license settings (v13.2 social)
+        add("import_sources", "session_notify_enabled", "session_notify_enabled INTEGER NOT NULL DEFAULT 0")
+        add("import_sources", "session_notify_webhook_url", "session_notify_webhook_url TEXT")
+        add("import_sources", "session_notify_mode", "session_notify_mode TEXT")
+        add("import_sources", "session_notify_started_at", "session_notify_started_at TEXT")
+        add("import_sources", "license_enabled", "license_enabled INTEGER NOT NULL DEFAULT 0")
+        add("import_sources", "license_webhook_url", "license_webhook_url TEXT")
+        add("import_sources", "license_levels_json", "license_levels_json TEXT")
+        add("import_sources", "license_started_at", "license_started_at TEXT")
+
     def execute(self, sql: str, params: Tuple = ()) -> sqlite3.Cursor:
         with self.connect() as db:
             cur = db.execute(sql, params)
@@ -68,7 +78,15 @@ CREATE TABLE IF NOT EXISTS import_sources (
     discord_webhook_url TEXT,
     record_window_started_at TEXT,
     weekly_recap_enabled INTEGER NOT NULL DEFAULT 0,
-    weekly_recap_started_at TEXT
+    weekly_recap_started_at TEXT,
+    session_notify_enabled INTEGER NOT NULL DEFAULT 0,
+    session_notify_webhook_url TEXT,
+    session_notify_mode TEXT,
+    session_notify_started_at TEXT,
+    license_enabled INTEGER NOT NULL DEFAULT 0,
+    license_webhook_url TEXT,
+    license_levels_json TEXT,
+    license_started_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS import_files (
@@ -201,6 +219,39 @@ CREATE TABLE IF NOT EXISTS record_events (
     FOREIGN KEY(driver_id) REFERENCES drivers(id),
     FOREIGN KEY(session_id) REFERENCES sessions(id),
     FOREIGN KEY(lap_id) REFERENCES laps(id)
+);
+
+
+CREATE TABLE IF NOT EXISTS notification_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    notification_type TEXT NOT NULL,
+    source_id INTEGER,
+    session_id INTEGER,
+    event_key TEXT,
+    sent_at TEXT NOT NULL,
+    discord_status TEXT,
+    UNIQUE(notification_type, source_id, session_id, event_key),
+    FOREIGN KEY(source_id) REFERENCES import_sources(id),
+    FOREIGN KEY(session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS license_achievements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id INTEGER,
+    steam_id TEXT NOT NULL,
+    driver_id INTEGER,
+    driver_name TEXT NOT NULL,
+    license_name TEXT NOT NULL,
+    license_rank INTEGER NOT NULL,
+    best_time_ms INTEGER NOT NULL,
+    session_id INTEGER,
+    achieved_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    discord_status TEXT,
+    UNIQUE(source_id, steam_id),
+    FOREIGN KEY(source_id) REFERENCES import_sources(id),
+    FOREIGN KEY(driver_id) REFERENCES drivers(id),
+    FOREIGN KEY(session_id) REFERENCES sessions(id)
 );
 
 CREATE TABLE IF NOT EXISTS record_weekly_recaps (

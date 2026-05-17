@@ -1,7 +1,120 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+
 {% block content %}
-<div class="page-head"><h1>{{ t('import_logs') }}</h1><p>{{ t('processed_files') }}</p></div>
-<section class="panel"><table><thead><tr><th>{{ t('date') }}</th><th>{{ t('status') }}</th><th>{{ t('reason') }}</th><th>{{ t('file') }}</th></tr></thead><tbody>
-{% for r in rows %}<tr><td>{{ r.imported_at }}</td><td><span class="badge {{ r.status }}">{{ r.status }}</span></td><td>{{ r.reason or t('none') }}</td><td class="path">{{ r.file_path }}</td></tr>{% else %}<tr><td colspan="4" class="empty">{{ t('no_results') }}</td></tr>{% endfor %}
-</tbody></table></section>
+
+<style>
+.log-panel {
+    max-width: 96vw;
+    margin: 0 auto;
+    overflow-x: auto;
+}
+
+.log-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.log-table th,
+.log-table td {
+    vertical-align: top;
+}
+
+.log-date {
+    width: 180px;
+    white-space: nowrap;
+}
+
+.log-status {
+    width: 110px;
+    white-space: nowrap;
+}
+
+.log-reason {
+    width: 260px;
+}
+
+.log-file {
+    width: auto;
+    min-width: 420px;
+    word-break: break-all;
+    white-space: normal;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.log-action {
+    width: 120px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.log-reason pre {
+    white-space: pre-wrap;
+    overflow: auto;
+    max-height: 220px;
+    font-size: 11px;
+    margin: 0;
+}
+
+.retry-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+}
+</style>
+
+<div class="page-head">
+    <h1>{{ t("import_logs") }}</h1>
+    <p>{{ t("processed_files") }}</p>
+</div>
+
+<section class="panel log-panel">
+    <table class="log-table">
+        <thead>
+            <tr>
+                <th class="log-date">Data</th>
+                <th class="log-status">Stato</th>
+                <th class="log-reason">Motivo</th>
+                <th class="log-file">File</th>
+                <th class="log-action">Azione</th>
+            </tr>
+        </thead>
+
+        <tbody>
+        {% for r in rows %}
+            <tr>
+                <td class="log-date">{{ r.imported_at }}</td>
+
+                <td class="log-status">
+                    <span class="badge {{ r.status }}">{{ r.status }}</span>
+                </td>
+
+                <td class="log-reason">
+                    {% if r.reason %}
+                        <pre>{{ r.reason }}</pre>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <td class="log-file">{{ r.file_path }}</td>
+
+                <td class="log-action">
+                    {% if r.status == "error" %}
+                        <form method="POST" action="{{ url_for('retry_import_file', file_id=r.id) }}">
+                            <button type="submit" class="btn retry-btn">Riprova</button>
+                        </form>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="5">Nessun log disponibile</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
 {% endblock %}

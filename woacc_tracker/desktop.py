@@ -174,14 +174,8 @@ class TrackerDesktop:
 
         ttk.Button(
             top,
-            text=self._t("desktop_configure_discord_records", "🏁 Configure Discord records"),
-            command=self.configure_record_source
-        ).pack(side="left", padx=4)
-
-        ttk.Button(
-            top,
-            text=self._t("desktop_edit_webhook", "🔗 Edit webhook"),
-            command=self.edit_source_webhook
+            text=self._t("desktop_setup_discord", "🔗 Setup Discord"),
+            command=self.setup_discord_source
         ).pack(side="left", padx=4)
 
         ttk.Button(
@@ -197,6 +191,8 @@ class TrackerDesktop:
                 "enabled",
                 "record",
                 "weekly",
+                "session",
+                "license",
                 "name",
                 "path",
                 "announce",
@@ -210,6 +206,8 @@ class TrackerDesktop:
             ("enabled", self._t("desktop_enabled", "Enabled"), 70),
             ("record", self._t("records", "Records"), 80),
             ("weekly", self._t("desktop_recap", "Recap"), 80),
+            ("session", self._t("sessions", "Sessions"), 80),
+            ("license", self._t("licenses", "Licenses"), 80),
             ("name", self._t("desktop_name", "Name"), 180),
             ("path", self._t("desktop_path", "Path"), 460),
             ("announce", self._t("desktop_announce_name", "Announcement name"), 180),
@@ -317,6 +315,8 @@ class TrackerDesktop:
                     self._t("yes", "Yes") if src.get("enabled",True) else self._t("no", "No"),
                     self._t("yes", "Yes") if src.get("announce_records") else self._t("no", "No"),
                     self._t("yes", "Yes") if src.get("weekly_recap_enabled") else self._t("no", "No"),
+                    self._t("yes", "Yes") if src.get("session_notify_enabled") else self._t("no", "No"),
+                    self._t("yes", "Yes") if src.get("license_enabled") else self._t("no", "No"),
                     src.get("name",""),
                     src.get("path",""),
                     src.get("announce_name",""),
@@ -370,7 +370,15 @@ class TrackerDesktop:
             "record_window_started_at": "",
 
             "weekly_recap_enabled": False,
-            "weekly_recap_started_at": ""
+            "weekly_recap_started_at": "",
+            "session_notify_enabled": False,
+            "session_notify_webhook_url": "",
+            "session_notify_mode": "simple",
+            "session_notify_started_at": "",
+            "license_enabled": False,
+            "license_webhook_url": "",
+            "license_started_at": "",
+            "license_levels": []
         })
 
         save_config(self.cfg)
@@ -407,74 +415,192 @@ class TrackerDesktop:
         self._load_sources_to_tree()
 
     def configure_record_source(self):
+        # Compatibilità con il vecchio pulsante/funzione.
+        # Ora apre sempre la nuova finestra completa Setup Discord.
+        return self.setup_discord_source()
+
+
+
+    def setup_discord_source(self):
         idx = self._selected_source_index()
         if idx is None:
             return
 
         src = self.cfg["sources"][idx]
+        win = tk.Toplevel(self.root)
+        win.title(self._t("desktop_setup_discord", "Setup Discord"))
+        win.geometry("720x560")
+        win.transient(self.root)
+        win.grab_set()
 
-        enable = messagebox.askyesno(
-            self._t("desktop_announce_records", "Announce records"),
-            self._t("desktop_announce_records_prompt", "Enable record announcements for this folder?\n\nThis is not retroactive.")
-        )
+        nb = ttk.Notebook(win)
+        nb.pack(fill="both", expand=True, padx=10, pady=10)
 
-        src["announce_records"] = bool(enable)
+        tab_records = ttk.Frame(nb, padding=12)
+        tab_weekly = ttk.Frame(nb, padding=12)
+        tab_sessions = ttk.Frame(nb, padding=12)
+        tab_license = ttk.Frame(nb, padding=12)
+        nb.add(tab_records, text=self._t("discord_tab_records", "Record"))
+        nb.add(tab_weekly, text=self._t("discord_tab_weekly", "Weekly recap"))
+        nb.add(tab_sessions, text=self._t("discord_tab_sessions", "Sessioni"))
+        nb.add(tab_license, text=self._t("discord_tab_licenses", "Licenze"))
 
-        if enable:
-            src["announce_name"] = simpledialog.askstring(
-                self._t("desktop_announce_name", "Announcement name"),
-                self._t("desktop_event_server_name", "Event/server name:"),
-                initialvalue=src.get("announce_name") or src.get("name", "")
-            ) or src.get("name", "")
+        record_enabled = tk.BooleanVar(value=bool(src.get("announce_records")))
+        announce_name = tk.StringVar(value=src.get("announce_name") or src.get("name", ""))
+        record_webhook = tk.StringVar(value=src.get("discord_webhook_url", ""))
+        weekly_enabled = tk.BooleanVar(value=bool(src.get("weekly_recap_enabled")))
 
-            current = src.get("discord_webhook_url", "")
+        session_enabled = tk.BooleanVar(value=bool(src.get("session_notify_enabled")))
+        session_webhook = tk.StringVar(value=src.get("session_notify_webhook_url", ""))
+        session_mode = tk.StringVar(value=src.get("session_notify_mode") or "simple")
 
-            if not current:
-                src["discord_webhook_url"] = simpledialog.askstring(
-                    self._t("desktop_discord_webhook", "Discord Webhook"),
-                    self._t("desktop_discord_webhook_url", "Discord webhook URL:"),
-                    initialvalue=""
-                ) or ""
-            else:
-                if messagebox.askyesno(self._t("desktop_webhook", "Webhook"), self._t("desktop_webhook_exists_prompt", "Webhook already present.\nModify it?")):
-                    src["discord_webhook_url"] = simpledialog.askstring(
-                        self._t("desktop_discord_webhook", "Discord Webhook"),
-                        self._t("desktop_new_webhook", "New webhook:"),
-                        initialvalue=current
-                    ) or current
+        license_enabled = tk.BooleanVar(value=bool(src.get("license_enabled")))
+        license_webhook = tk.StringVar(value=src.get("license_webhook_url", ""))
+        levels = list(src.get("license_levels") or [])
+        while len(levels) < 3:
+            levels.append({"name": "", "time_ms": ""})
+        level_count = tk.IntVar(value=max(1, min(3, len([l for l in levels if l.get("name") and l.get("time_ms")]) or 3)))
+        level_name_vars = []
+        level_time_vars = []
 
-            src["record_window_started_at"] = datetime.now().isoformat(timespec="seconds")
+        def ms_to_edit(ms):
+            try:
+                ms = int(ms)
+                m = ms // 60000
+                s2 = (ms % 60000) // 1000
+                mil = ms % 1000
+                return f"{m}:{s2:02d}.{mil:03d}" if m else f"{s2}.{mil:03d}"
+            except Exception:
+                return ""
 
-        else:
-            src["record_window_started_at"] = ""
-            src["weekly_recap_enabled"] = False
-            src["weekly_recap_started_at"] = ""
+        def parse_time(value):
+            value = (value or "").strip().replace(",", ".")
+            if not value:
+                return 0
+            try:
+                if ":" in value:
+                    m, rest = value.split(":", 1)
+                    return int(float(m) * 60000 + float(rest) * 1000)
+                return int(float(value) * 1000)
+            except Exception:
+                return 0
 
-        save_config(self.cfg)
-        self._load_sources_to_tree()
-        self._log(self._t("desktop_record_status_log", "Discord records {state} for {name}").format(state=(self._t("desktop_active", "active") if enable else self._t("desktop_disabled", "disabled")), name=src.get("name")))
+        # Record tab
+        ttk.Checkbutton(tab_records, text=self._t("discord_enable_record_announcements", "Abilita annuncio record"), variable=record_enabled).grid(row=0, column=0, sticky="w", pady=6)
+        ttk.Label(tab_records, text=self._t("discord_event_server_name", "Nome evento/server")).grid(row=1, column=0, sticky="w", pady=6)
+        ttk.Entry(tab_records, textvariable=announce_name, width=60).grid(row=1, column=1, sticky="w", pady=6)
+        ttk.Label(tab_records, text=self._t("discord_record_webhook", "Webhook record")).grid(row=2, column=0, sticky="w", pady=6)
+        ttk.Entry(tab_records, textvariable=record_webhook, width=72).grid(row=2, column=1, sticky="w", pady=6)
+        ttk.Button(tab_records, text=self._t("discord_clear_saved_records", "Cancella record salvati"), command=lambda: self._reset_source_records(src)).grid(row=3, column=1, sticky="w", pady=10)
 
+        # Weekly tab
+        ttk.Checkbutton(tab_weekly, text=self._t("discord_enable_weekly_recap", "Abilita recap settimanale record"), variable=weekly_enabled).grid(row=0, column=0, sticky="w", pady=6)
+        ttk.Label(tab_weekly, text=self._t("discord_weekly_help", "Usa il webhook record. Il recap mostra pista, pilota e tempo record.")).grid(row=1, column=0, columnspan=2, sticky="w", pady=6)
+
+        # Sessions tab
+        ttk.Checkbutton(tab_sessions, text=self._t("discord_enable_session_notifications", "Abilita notifica nuove sessioni"), variable=session_enabled).grid(row=0, column=0, sticky="w", pady=6)
+        ttk.Label(tab_sessions, text=self._t("discord_sessions_webhook", "Webhook sessioni")).grid(row=1, column=0, sticky="w", pady=6)
+        ttk.Entry(tab_sessions, textvariable=session_webhook, width=72).grid(row=1, column=1, sticky="w", pady=6)
+        ttk.Label(tab_sessions, text=self._t("discord_mode", "Modalità")).grid(row=2, column=0, sticky="w", pady=6)
+        ttk.Radiobutton(tab_sessions, text=self._t("discord_session_mode_simple", "Semplice: solo sessione disponibile + link tracker"), variable=session_mode, value="simple").grid(row=2, column=1, sticky="w")
+        ttk.Radiobutton(tab_sessions, text=self._t("discord_session_mode_detailed", "Dettagliata: Q/R con Top 3, Practice semplice"), variable=session_mode, value="detailed").grid(row=3, column=1, sticky="w")
+
+        # Licenses tab
+        ttk.Checkbutton(tab_license, text=self._t("discord_enable_license_mode", "Abilita modalità licenze"), variable=license_enabled).grid(row=0, column=0, sticky="w", pady=6)
+        ttk.Label(tab_license, text=self._t("discord_license_webhook", "Webhook licenze")).grid(row=1, column=0, sticky="w", pady=6)
+        ttk.Entry(tab_license, textvariable=license_webhook, width=72).grid(row=1, column=1, sticky="w", pady=6)
+        ttk.Label(tab_license, text=self._t("discord_license_threshold_count", "Numero soglie")).grid(row=2, column=0, sticky="w", pady=6)
+        ttk.Spinbox(tab_license, from_=1, to=3, textvariable=level_count, width=5).grid(row=2, column=1, sticky="w", pady=6)
+        ttk.Label(tab_license, text=self._t("discord_license_help", "Inserisci tempi tipo 1:45.000 o 105.000. SteamID non sarà mai mostrato nella web UI.")).grid(row=3, column=0, columnspan=2, sticky="w", pady=6)
+        for i in range(3):
+            nvar = tk.StringVar(value=str(levels[i].get("name") or ""))
+            tvar = tk.StringVar(value=ms_to_edit(levels[i].get("time_ms") or 0))
+            level_name_vars.append(nvar)
+            level_time_vars.append(tvar)
+            ttk.Label(tab_license, text=self._t("discord_license_threshold_name", "Soglia {n} nome").format(n=i+1)).grid(row=4+i, column=0, sticky="w", pady=4)
+            rowf = ttk.Frame(tab_license)
+            rowf.grid(row=4+i, column=1, sticky="w", pady=4)
+            ttk.Entry(rowf, textvariable=nvar, width=18).pack(side="left", padx=(0, 8))
+            ttk.Label(rowf, text=self._t("time", "Tempo")).pack(side="left")
+            ttk.Entry(rowf, textvariable=tvar, width=14).pack(side="left", padx=(6, 0))
+        ttk.Button(tab_license, text=self._t("discord_clear_license_history", "Cancella storico licenze"), command=lambda: self._reset_source_licenses(src)).grid(row=8, column=1, sticky="w", pady=10)
+
+        buttons = ttk.Frame(win, padding=10)
+        buttons.pack(fill="x")
+
+        def save_discord_setup():
+            src["announce_records"] = bool(record_enabled.get())
+            src["announce_name"] = announce_name.get().strip() or src.get("name", "")
+            src["discord_webhook_url"] = record_webhook.get().strip()
+            if src["announce_records"] and not src.get("record_window_started_at"):
+                src["record_window_started_at"] = datetime.now().isoformat(timespec="seconds")
+            if not src["announce_records"]:
+                src["record_window_started_at"] = ""
+
+            src["weekly_recap_enabled"] = bool(weekly_enabled.get())
+            if src["weekly_recap_enabled"] and not src.get("weekly_recap_started_at"):
+                src["weekly_recap_started_at"] = datetime.now().isoformat(timespec="seconds")
+            if not src["weekly_recap_enabled"]:
+                src["weekly_recap_started_at"] = ""
+
+            src["session_notify_enabled"] = bool(session_enabled.get())
+            src["session_notify_webhook_url"] = session_webhook.get().strip()
+            src["session_notify_mode"] = session_mode.get() or "simple"
+            if src["session_notify_enabled"] and not src.get("session_notify_started_at"):
+                src["session_notify_started_at"] = datetime.now().isoformat(timespec="seconds")
+            if not src["session_notify_enabled"]:
+                src["session_notify_started_at"] = ""
+
+            src["license_enabled"] = bool(license_enabled.get())
+            src["license_webhook_url"] = license_webhook.get().strip()
+            src["license_started_at"] = src.get("license_started_at") or (datetime.now().isoformat(timespec="seconds") if src["license_enabled"] else "")
+            if not src["license_enabled"]:
+                src["license_started_at"] = ""
+            count = max(1, min(3, int(level_count.get())))
+            new_levels = []
+            for i in range(count):
+                nm = level_name_vars[i].get().strip()
+                tm = parse_time(level_time_vars[i].get())
+                if nm and tm > 0:
+                    new_levels.append({"name": nm, "time_ms": tm})
+            src["license_levels"] = new_levels
+
+            save_config(self.cfg)
+            self._load_sources_to_tree()
+            self._log(self._t("desktop_discord_setup_saved", "Discord setup saved"))
+            win.destroy()
+
+        ttk.Button(buttons, text=self._t("save", "Salva"), command=save_discord_setup).pack(side="right", padx=5)
+        ttk.Button(buttons, text=self._t("cancel", "Annulla"), command=win.destroy).pack(side="right", padx=5)
+
+    def _source_id_for_path(self, src):
+        row = self.db.one("SELECT id FROM import_sources WHERE path=?", (str(Path(src.get("path", "")).resolve()),))
+        return int(row["id"]) if row else None
+
+    def _reset_source_records(self, src):
+        source_id = self._source_id_for_path(src)
+        if not source_id:
+            messagebox.showinfo("WOACC", self._t("discord_no_record_db", "Nessun record DB trovato per questa sorgente."))
+            return
+        if messagebox.askyesno(self._t("desktop_confirm", "Conferma"), self._t("discord_confirm_clear_records", "Cancellare record e recap salvati per questa sorgente?")):
+            self.db.execute("DELETE FROM record_events WHERE source_id=?", (source_id,))
+            self.db.execute("DELETE FROM record_windows WHERE source_id=?", (source_id,))
+            self.db.execute("DELETE FROM record_weekly_recaps WHERE source_id=?", (source_id,))
+            self._log(self._t("discord_source_records_deleted", "Record sorgente cancellati"))
+
+    def _reset_source_licenses(self, src):
+        source_id = self._source_id_for_path(src)
+        if not source_id:
+            messagebox.showinfo("WOACC", self._t("discord_no_license_db", "Nessuna licenza DB trovata per questa sorgente."))
+            return
+        if messagebox.askyesno(self._t("desktop_confirm", "Conferma"), self._t("discord_confirm_clear_licenses", "Cancellare lo storico licenze per questa sorgente?")):
+            self.db.execute("DELETE FROM license_achievements WHERE source_id=?", (source_id,))
+            self.db.execute("DELETE FROM notification_history WHERE source_id=? AND notification_type='license'", (source_id,))
+            self._log(self._t("discord_source_licenses_deleted", "Licenze sorgente cancellate"))
 
     def edit_source_webhook(self):
-        idx = self._selected_source_index()
-        if idx is None:
-            return
-
-        src = self.cfg["sources"][idx]
-
-        new_webhook = simpledialog.askstring(
-            self._t("desktop_edit_webhook_title", "Edit webhook"),
-            self._t("desktop_discord_webhook_url", "Discord webhook URL:"),
-            initialvalue=src.get("discord_webhook_url", "")
-        )
-
-        if new_webhook is None:
-            return
-
-        src["discord_webhook_url"] = new_webhook.strip()
-        save_config(self.cfg)
-        self._load_sources_to_tree()
-        self._log(self._t("desktop_webhook_updated", "Webhook updated for {name}").format(name=src.get("name")))
+        # La modifica webhook ora fa parte del Setup Discord completo.
+        return self.setup_discord_source()
 
 
     def toggle_weekly_recap(self):
