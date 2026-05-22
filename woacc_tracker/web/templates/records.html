@@ -1,9 +1,97 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-head"><h1>{{ t('event_records') }}</h1><p>{{ t('event_records_subtitle') }}</p></div>
-<section class="panel"><table><thead><tr><th>{{ t('source') }}</th><th>{{ t('track') }}</th><th>{{ t('from') }}</th><th>{{ t('records') }}</th><th>{{ t('driver') }}</th><th>{{ t('car') }}</th><th>{{ t('updated') }}</th></tr></thead><tbody>
-{% for r in rows %}
-<tr class="clickable" data-href="{{ url_for('session_detail', session_id=r.session_id) if r.session_id else '#' }}"><td>{{ r.source_name }}</td><td>{{ r.track_name }}{% if r.track_layout %} / {{ r.track_layout }}{% endif %}</td><td>{{ r.window_started_at }}</td><td><strong>{{ r.best_lap_ms|lap_time }}</strong></td><td>{{ r.driver_name or t('none') }}</td><td>{{ r.car_name or t('none') }}</td><td>{{ r.updated_at or t('none') }}</td></tr>
-{% else %}<tr><td colspan="7" class="empty">{{ t('no_active_event_records') }}</td></tr>{% endfor %}
-</tbody></table></section>
+<div class="records-page">
+  <div class="page-head share-head">
+    <div>
+      <h1>{{ t('records_title', 'Record piste') }}</h1>
+      <p>{{ t('records_subtitle', 'Seleziona una pista per vedere la classifica generale e le classifiche filtrate per auto.') }}</p>
+      <p class="muted">{{ t('records_hint', 'La classifica generale mostra il miglior giro valido per ogni combinazione pilota + auto. Se lo stesso pilota ha tempi con auto diverse, compare una volta per ogni auto.') }}</p>
+    </div>
+    <button type="button" class="share-btn primary-share" data-share-page data-copied-text="{{ t('copied_link') }}" data-failed-text="{{ t('copy_failed') }}">{{ t('share_current_page') }}</button>
+  </div>
+
+  {% if not selected_track %}
+  <section class="records-track-grid">
+    {% for tr in tracks %}
+    <a class="record-track-card" href="{{ url_for('records', track=tr.track_name, layout=tr.track_layout) }}">
+      <div class="record-track-name">{{ tr.track_name }}{% if tr.track_layout %}<span class="muted"> / {{ tr.track_layout }}</span>{% endif %}</div>
+      <div class="record-track-best">{{ tr.best_lap_ms|lap_time if tr.best_lap_ms else t('none') }}</div>
+      <div class="record-track-meta">
+        <span>{{ tr.sessions_count }} {{ t('sessions_count') }}</span>
+        <span>{{ tr.drivers_count }} {{ t('drivers') }}</span>
+        <span>{{ tr.cars_count }} {{ t('cars', 'Auto') }}</span>
+      </div>
+    </a>
+    {% else %}
+    <section class="panel"><p class="empty">{{ t('records_no_tracks', 'Nessuna pista con giri validi trovata.') }}</p></section>
+    {% endfor %}
+  </section>
+  {% else %}
+
+  <div class="section-head records-detail-head">
+    <div>
+      <a href="{{ url_for('records') }}">{{ t('back_to_tracks', '← Torna alle piste') }}</a>
+      <h2>{{ selected_track }}{% if selected_layout %} / {{ selected_layout }}{% endif %}</h2>
+      {% if current_track %}
+      <div class="mini-stats">
+        <div><span>{{ t('best_lap') }}</span><strong>{{ current_track.best_lap_ms|lap_time if current_track.best_lap_ms else t('none') }}</strong></div>
+        <div><span>{{ t('sessions_count') }}</span><strong>{{ current_track.sessions_count }}</strong></div>
+        <div><span>{{ t('drivers') }}</span><strong>{{ current_track.drivers_count }}</strong></div>
+        <div><span>{{ t('cars', 'Auto') }}</span><strong>{{ current_track.cars_count }}</strong></div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <form class="filters records-filters" method="get">
+    <input type="hidden" name="track" value="{{ selected_track }}">
+    <input type="hidden" name="layout" value="{{ selected_layout }}">
+    <select name="car">
+      <option value="">{{ t('records_general_ranking', 'Classifica generale') }}</option>
+      {% for c in cars %}
+      <option value="{{ c.car_name }}" {% if selected_car == c.car_name %}selected{% endif %}>{{ c.car_name }}</option>
+      {% endfor %}
+    </select>
+    <button>{{ t('filter') }}</button>
+  </form>
+
+  <section class="panel leaderboard-panel">
+    <div class="section-head">
+      <h2>{% if selected_car %}{{ t('records_car_ranking', 'Classifica per auto') }}: {{ selected_car }}{% else %}{{ t('records_general_ranking', 'Classifica generale') }}{% endif %}</h2>
+    </div>
+    <table class="leaderboard-table records-table">
+      <thead>
+        <tr>
+          <th class="col-pos">{{ t('position') }}</th>
+          <th>{{ t('driver') }}</th>
+          <th class="col-category">{{ t('category') }}</th>
+          <th>{{ t('car') }}</th>
+          <th class="col-best">{{ t('best_lap') }}</th>
+          <th>{{ t('lap') }}</th>
+          <th>{{ t('session') }}</th>
+          <th>{{ t('server') }}</th>
+          <th class="col-date">{{ t('date') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="clickable" data-href="{{ url_for('session_detail', session_id=r.session_id) }}">
+          <td class="col-pos">{{ loop.index }}</td>
+          <td><div class="clip driver" title="{{ r.display_name }}"><strong>{{ r.display_name }}</strong>{% if r.nation %}<span class="muted"> {{ r.nation }}</span>{% endif %}</div></td>
+          <td class="col-category">{% if r.driver_category %}<span class="badge category">{{ r.driver_category }}</span>{% else %}{{ t('none') }}{% endif %}</td>
+          <td><div class="clip car" title="{{ r.car_name }}">{{ r.car_name }}</div></td>
+          <td class="col-best"><strong>{{ r.best_lap_ms|lap_time }}</strong></td>
+          <td>{{ r.lap_number }}</td>
+          <td>{{ r.session_type }}</td>
+          <td><div class="clip" title="{{ r.server_name }}">{{ r.server_name }}</div></td>
+          <td class="col-date">{{ r.session_datetime }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="empty">{{ t('no_results') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+</div>
 {% endblock %}

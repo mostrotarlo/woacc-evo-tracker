@@ -32,7 +32,6 @@
     <a href="{{ url_for('records') }}">{{ t('records') }}</a>
     <a href="{{ url_for('licenses_page') }}">{{ t('licenses', 'Licenze') }}</a>
     <a href="{{ url_for('woacc_community') }}">WOACC</a>
-    <a href="{{ url_for('logs') }}">{{ t('logs') }}</a>
     {% if cfg.password_enabled %}<a href="{{ url_for('logout') }}">{{ t('logout') }}</a>{% endif %}
   </nav>
   <button type="button" class="share-btn top-share" data-share-page data-copied-text="{{ t('copied_link') }}" data-failed-text="{{ t('copy_failed') }}" title="{{ t('share_current_page') }}">{{ t('share') }}</button>

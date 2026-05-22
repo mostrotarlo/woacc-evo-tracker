@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-head">
-  <h1>{{ t('licenses', 'Licenze') }}</h1>
-  <p>{{ t('licenses_intro', 'Classifica licenze e ultime licenze conseguite. Lo SteamID resta interno e non viene mostrato.') }}</p>
+  <h1>{{ t('licenses', 'Licenses') }}</h1>
+  <p>{{ t('licenses_intro', 'License ranking and latest earned licenses.') }}</p>
 </div>
 
 <section class="panel">
@@ -39,7 +39,7 @@
         <td><span class="badge">{{ r.license_name }}</span></td>
         <td>{{ r.best_time_ms|lap_time }}</td>
         <td>{{ r.track_name or '—' }}</td>
-        <td>{{ r.session_type or '—' }}</td>
+        <td>{{ t('session_type_' ~ (r.session_type or '')|lower, r.session_type or '—') }}</td>
       </tr>
     {% else %}
       <tr><td colspan="6" class="empty">{{ t('no_licenses_found', 'Nessuna licenza trovata') }}</td></tr>
@@ -69,7 +69,7 @@
         <td><span class="badge">{{ r.license_name }}</span></td>
         <td>{{ r.best_time_ms|lap_time }}</td>
         <td>{{ r.track_name or '—' }}</td>
-        <td>{{ r.session_type or '—' }}</td>
+        <td>{{ t('session_type_' ~ (r.session_type or '')|lower, r.session_type or '—') }}</td>
       </tr>
     {% else %}
       <tr><td colspan="6" class="empty">{{ t('no_licenses_found', 'Nessuna licenza trovata') }}</td></tr>

@@ -144,6 +144,7 @@ class TrackerDesktop:
         ttk.Button(actions, text=self._t("desktop_start_tracker", "🟢 Start Tracker"), command=self.start_tracker).pack(side="left", padx=5)
         ttk.Button(actions, text=self._t("desktop_stop_tracker", "🔴 Stop Tracker"), command=self.stop_tracker).pack(side="left", padx=5)
         ttk.Button(actions, text=self._t("desktop_open_web", "🌐 Open Web App"), command=self.open_web).pack(side="left", padx=5)
+        ttk.Button(actions, text=self._t("desktop_open_logs", "📄 Open Logs"), command=self.open_logs).pack(side="left", padx=5)
         ttk.Button(actions, text=self._t("desktop_join_woacc", "🌍 Entra nella community WOACC"), command=self.open_woacc_community).pack(side="left", padx=5)
         ttk.Button(actions, text=self._t("desktop_import_now", "📥 Import now"), command=self.manual_import).pack(side="left", padx=5)
         ttk.Button(actions, text=self._t("desktop_save_settings", "💾 Save settings"), command=self.save_settings).pack(side="left", padx=5)
@@ -729,6 +730,10 @@ class TrackerDesktop:
     def open_web(self):
         port = int(self.cfg.get("port", 5055))
         webbrowser.open(f"http://127.0.0.1:{port}")
+
+    def open_logs(self):
+        port = int(self.cfg.get("port", 5055))
+        webbrowser.open(f"http://127.0.0.1:{port}/logs")
 
 
 def main():

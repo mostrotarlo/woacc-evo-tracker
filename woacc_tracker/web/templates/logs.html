@@ -68,53 +68,88 @@
 </div>
 
 <section class="panel log-panel">
-    <table class="log-table">
-        <thead>
-            <tr>
-                <th class="log-date">Data</th>
-                <th class="log-status">Stato</th>
-                <th class="log-reason">Motivo</th>
-                <th class="log-file">File</th>
-                <th class="log-action">Azione</th>
-            </tr>
-        </thead>
 
-        <tbody>
-        {% for r in rows %}
-            <tr>
-                <td class="log-date">{{ r.imported_at }}</td>
+<table class="log-table">
 
-                <td class="log-status">
-                    <span class="badge {{ r.status }}">{{ r.status }}</span>
-                </td>
+<thead>
+<tr>
+    <th class="log-date">{{ t("date") }}</th>
+    <th class="log-status">{{ t("status") }}</th>
+    <th class="log-reason">{{ t("reason") }}</th>
+    <th class="log-file">{{ t("file") }}</th>
+    <th class="log-action">{{ t("actions","Action") }}</th>
+</tr>
+</thead>
 
-                <td class="log-reason">
-                    {% if r.reason %}
-                        <pre>{{ r.reason }}</pre>
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
+<tbody>
 
-                <td class="log-file">{{ r.file_path }}</td>
+{% for r in rows %}
 
-                <td class="log-action">
-                    {% if r.status == "error" %}
-                        <form method="POST" action="{{ url_for('retry_import_file', file_id=r.id) }}">
-                            <button type="submit" class="btn retry-btn">Riprova</button>
-                        </form>
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
-            </tr>
-        {% else %}
-            <tr>
-                <td colspan="5">Nessun log disponibile</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+<tr>
+
+<td class="log-date">
+{{ r.imported_at }}
+</td>
+
+<td class="log-status">
+<span class="badge {{ r.status }}">
+{{ r.status }}
+</span>
+</td>
+
+<td class="log-reason">
+{% if r.reason %}
+<pre>{{ r.reason }}</pre>
+{% else %}
+—
+{% endif %}
+</td>
+
+<td class="log-file">
+{{ r.file_path }}
+</td>
+
+<td class="log-action">
+
+{% if r.status=="error" %}
+
+<form method="POST"
+action="{{ url_for('retry_import_file', file_id=r.id) }}">
+
+<button
+type="submit"
+class="btn retry-btn">
+
+{{ t("retry","Retry") }}
+
+</button>
+
+</form>
+
+{% else %}
+—
+{% endif %}
+
+</td>
+
+</tr>
+
+{% else %}
+
+<tr>
+<td colspan="5">
+
+{{ t("no_logs_available","No logs available") }}
+
+</td>
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
 </section>
 
 {% endblock %}

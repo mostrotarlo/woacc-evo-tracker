@@ -112,17 +112,28 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
 
     @app.route("/set-language/<lang_code>")
     def set_language(lang_code: str):
+
         lang_code = (lang_code or "").strip().lower()
+
         if lang_code not in available_languages():
             abort(404)
-        cfg["language"] = lang_code
-        try:
-            save_config(cfg)
-        except Exception:
-            pass
-        next_url = _safe_local_redirect_target(request.args.get("next"))
-        resp = make_response(redirect(next_url))
-        resp.set_cookie("woacc_lang", lang_code, max_age=60 * 60 * 24 * 365, samesite="Lax")
+
+        next_url = _safe_local_redirect_target(
+            request.args.get("next")
+        )
+
+        resp = make_response(
+            redirect(next_url)
+        )
+
+        # SOLO preferenza browser utente
+        resp.set_cookie(
+            "woacc_lang",
+            lang_code,
+            max_age=60*60*24*365,
+            samesite="Lax"
+        )
+
         return resp
 
     def login_required(fn):
@@ -130,6 +141,18 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         def wrapper(*args, **kwargs):
             if cfg.get("password_enabled") and not session.get("logged_in"):
                 return redirect(url_for("login", next=request.path))
+            return fn(*args, **kwargs)
+        return wrapper
+
+    def local_only_required(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            remote = (request.remote_addr or "").split(",", 1)[0].strip()
+            host = (request.host or "").split(":", 1)[0].strip().lower()
+            allowed_hosts = {"localhost", "127.0.0.1", "::1"}
+            allowed = host in allowed_hosts or host.startswith("127.") or remote in allowed_hosts or remote.startswith("127.")
+            if not allowed:
+                abort(403)
             return fn(*args, **kwargs)
         return wrapper
 
@@ -400,12 +423,131 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
     @app.route("/records")
     @login_required
     def records():
-        rows = db.query(
-            """SELECT rw.*, src.name AS source_name
-               FROM record_windows rw JOIN import_sources src ON src.id=rw.source_id
-               ORDER BY rw.updated_at DESC LIMIT 200"""
+        selected_track = (request.args.get("track") or "").strip()
+        selected_layout = (request.args.get("layout") or "").strip()
+        selected_car = (request.args.get("car") or "").strip()
+
+        tracks = db.query(
+            """
+            SELECT
+                srv.track_name,
+                COALESCE(srv.track_layout, '') AS track_layout,
+                COUNT(DISTINCT sess.id) AS sessions_count,
+                COUNT(DISTINCT se.driver_id) AS drivers_count,
+                COUNT(DISTINCT se.car_name) AS cars_count,
+                MIN(l.lap_time_ms) AS best_lap_ms
+            FROM servers srv
+            JOIN sessions sess ON sess.server_id = srv.id
+            JOIN session_entries se ON se.session_id = sess.id
+            JOIN laps l ON l.entry_id = se.id
+            WHERE l.is_valid = 1
+              AND srv.track_name IS NOT NULL
+              AND srv.track_name <> ''
+            GROUP BY srv.track_name, COALESCE(srv.track_layout, '')
+            ORDER BY srv.track_name ASC, COALESCE(srv.track_layout, '') ASC
+            """
         )
-        return render_template("records.html", cfg=cfg, rows=rows)
+
+        cars = []
+        rows = []
+        current_track = None
+
+        if selected_track:
+            current_track = db.one(
+                """
+                SELECT
+                    srv.track_name,
+                    COALESCE(srv.track_layout, '') AS track_layout,
+                    COUNT(DISTINCT sess.id) AS sessions_count,
+                    COUNT(DISTINCT se.driver_id) AS drivers_count,
+                    COUNT(DISTINCT se.car_name) AS cars_count,
+                    MIN(l.lap_time_ms) AS best_lap_ms
+                FROM servers srv
+                JOIN sessions sess ON sess.server_id = srv.id
+                JOIN session_entries se ON se.session_id = sess.id
+                JOIN laps l ON l.entry_id = se.id
+                WHERE l.is_valid = 1
+                  AND srv.track_name = ?
+                  AND COALESCE(srv.track_layout, '') = ?
+                GROUP BY srv.track_name, COALESCE(srv.track_layout, '')
+                """,
+                (selected_track, selected_layout),
+            )
+
+            cars = db.query(
+                """
+                SELECT se.car_name, COUNT(DISTINCT se.driver_id) AS drivers_count, MIN(l.lap_time_ms) AS best_lap_ms
+                FROM servers srv
+                JOIN sessions sess ON sess.server_id = srv.id
+                JOIN session_entries se ON se.session_id = sess.id
+                JOIN laps l ON l.entry_id = se.id
+                WHERE l.is_valid = 1
+                  AND srv.track_name = ?
+                  AND COALESCE(srv.track_layout, '') = ?
+                  AND se.car_name IS NOT NULL
+                  AND se.car_name <> ''
+                GROUP BY se.car_name
+                ORDER BY se.car_name ASC
+                """,
+                (selected_track, selected_layout),
+            )
+
+            params = [selected_track, selected_layout]
+            car_filter = ""
+            if selected_car:
+                car_filter = "AND se.car_name = ?"
+                params.append(selected_car)
+
+            rows = db.query(
+                f"""
+                WITH ranked AS (
+                    SELECT
+                        d.id AS driver_id,
+                        d.display_name,
+                        d.nation,
+                        d.driver_category,
+                        se.car_name,
+                        l.lap_time_ms AS best_lap_ms,
+                        l.lap_number,
+                        sess.id AS session_id,
+                        sess.session_type,
+                        sess.session_datetime,
+                        srv.server_name,
+                        srv.track_name,
+                        COALESCE(srv.track_layout, '') AS track_layout,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY d.id, se.car_name
+                            ORDER BY l.lap_time_ms ASC, sess.session_datetime DESC, l.lap_number ASC
+                        ) AS rn
+                    FROM servers srv
+                    JOIN sessions sess ON sess.server_id = srv.id
+                    JOIN session_entries se ON se.session_id = sess.id
+                    JOIN drivers d ON d.id = se.driver_id
+                    JOIN laps l ON l.entry_id = se.id
+                    WHERE l.is_valid = 1
+                      AND srv.track_name = ?
+                      AND COALESCE(srv.track_layout, '') = ?
+                      {car_filter}
+                )
+                SELECT *
+                FROM ranked
+                WHERE rn = 1
+                ORDER BY best_lap_ms ASC, display_name ASC, car_name ASC
+                """,
+                tuple(params),
+            )
+
+        return render_template(
+            "records.html",
+            cfg=cfg,
+            tracks=tracks,
+            cars=cars,
+            rows=rows,
+            selected_track=selected_track,
+            selected_layout=selected_layout,
+            selected_car=selected_car,
+            current_track=current_track,
+        )
 
 
 
@@ -444,12 +586,14 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
 
     @app.route("/logs")
     @login_required
+    @local_only_required
     def logs():
         rows = db.query("SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 300")
         return render_template("logs.html", cfg=cfg, rows=rows)
 
     @app.route("/logs/retry/<int:file_id>", methods=["POST"])
     @login_required
+    @local_only_required
     def retry_import_file(file_id: int):
         row = db.one("SELECT * FROM import_files WHERE id=?", (file_id,))
         if not row:
