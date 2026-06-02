@@ -11,9 +11,14 @@ It imports EVO result files automatically, builds web leaderboards and session p
 ## Main features
 
 - Automatic import of Assetto Corsa EVO result JSON files
+- Optional import of server conditions from `Assetto Corsa EVO Server.txt`
+- Weather, air temperature, rain, wet track, wind, grip, rubber and marbles stored per session
+- Compact DRY/WET/RAIN condition labels in web tables and Discord messages
+- Dry/wet filters for sessions, records and leaderboards
 - Practice / Qualifying / Race session archive
 - Server, track and session detail pages
 - Filtered leaderboards with shareable links
+- Track records by circuit, car and driver
 - Driver statistics and lap history
 - Import logs with **Retry** and full traceback diagnostics
 - Manual re-import of failed JSON files
@@ -22,6 +27,115 @@ It imports EVO result files automatically, builds web leaderboards and session p
 - Reverse proxy / Caddy support with configurable base path
 - Custom web theme: colors and fonts
 - Multi-language interface
+
+---
+
+## New in v13.3.0 Conditions and Community Recap
+
+### Server conditions from logs
+
+Each monitored source can now be linked to the dedicated server log:
+
+```text
+Assetto Corsa EVO Server.txt
+```
+
+When a new result JSON is imported, WOACC Tracker reads the matching `Season Definition` from the log and stores the server conditions with the session.
+
+Imported condition fields include:
+
+- weather type
+- air temperature
+- precipitation
+- track wetness
+- wind speed
+- humidity
+- initial grip
+- dynamic track grip
+- rubber
+- marbles
+
+The original EVO result JSON is never modified.
+
+### Local time handling
+
+Some result filenames use UTC while the server log uses local Windows time.
+
+WOACC Tracker now falls back to the real file write time when needed, so the web interface can show the local session time and still match the correct log conditions.
+
+### DRY / WET / RAIN labels
+
+Conditions are shown in compact form:
+
+```text
+DRY | 23.4C | G 1.00 | WET 0.00 | WIND 0.0
+WET | 18.2C | G 0.72 | WET 0.40 | WIND 1.2
+WET | RAIN 0.25 | 18.2C | G 0.65 | WET 0.60 | WIND 2.5
+```
+
+Meaning:
+
+- **DRY**: dry track
+- **WET**: wet track
+- **RAIN**: active rain
+- **C**: air temperature
+- **G**: track grip
+- **WIND**: wind speed
+
+### Web filters
+
+The web interface now supports filtering by conditions:
+
+- all conditions
+- dry
+- wet
+
+Available on:
+
+- Sessions
+- Filtered leaderboard
+- Records
+
+### Discord and recap updates
+
+- Discord record messages include session conditions when available.
+- Weekly recap is now global for the community instead of being tied to a single monitored server.
+- Weekly recap uses its own dedicated webhook.
+- The desktop app shows a visual ON/OFF recap status.
+
+### Bridge API conditions metadata
+
+The WOACC Bridge API keeps serving the original JSON unchanged:
+
+```text
+GET /api/woacc/session/<session_id>/original.json
+```
+
+The session index includes extra metadata under `conditions`:
+
+```json
+{
+  "session_id": 111,
+  "download_url": "https://example.com/api/woacc/session/111/original.json",
+  "conditions": {
+    "ambient_temperature_c": 23.4,
+    "precipitation": 0,
+    "initial_global_wetness": 0,
+    "wind_speed_m_s": 0,
+    "track_grip": 1.0
+  }
+}
+```
+
+External tools can keep reading the original JSON as before and optionally consume the extra `conditions` block from the index.
+
+### Other improvements
+
+- Invalid laps now show a reason when available.
+- Pit return flag `129` marks the next lap as an outlap.
+- Driver category extraction supports `cupCategory`.
+- Spanish translation file added.
+- Record monitoring operational details are no longer exposed on the public web pages.
 
 ---
 
@@ -171,8 +285,9 @@ In the desktop app:
 1. open the **Monitored folders** tab
 2. press **Add folder**
 3. select the EVO Dedicated Server `results` folder
-4. enable the source
-5. press **Import now** or start the tracker
+4. optionally select `Assetto Corsa EVO Server.txt` to import server conditions
+5. enable the source
+6. press **Import now** or start the tracker
 
 Supported session types:
 
@@ -267,6 +382,10 @@ GET /api/woacc/sessions
 GET /api/woacc/session/<session_id>/original.json
 ```
 
+`/api/woacc/sessions` includes session metadata and, when available, a `conditions` object.
+
+`/api/woacc/session/<session_id>/original.json` returns the original EVO result JSON unchanged.
+
 When served under `/tracker`:
 
 ```text
@@ -315,12 +434,10 @@ dist/
 
 ## Build executable
 
-If a build script is included in the repository, use it from the project root.
+Recommended Windows command from the project root:
 
-Typical command:
-
-```bat
-build_exe.bat
+```powershell
+python -m PyInstaller --noconfirm --onefile --windowed --name "WOACC Tracker" --add-data "woacc_tracker\web\templates;woacc_tracker\web\templates" --add-data "woacc_tracker\web\static;woacc_tracker\web\static" --add-data "woacc_tracker\i18n;woacc_tracker\i18n" --hidden-import=jinja2 --hidden-import=werkzeug --hidden-import=flask run_tracker.py
 ```
 
 The compiled executable should be published in **GitHub Releases**, not committed directly to the source repository.
@@ -332,19 +449,19 @@ The compiled executable should be published in **GitHub Releases**, not committe
 Suggested tag:
 
 ```text
-v13.2.2
+v13.3.0
 ```
 
 Suggested release title:
 
 ```text
-WOACC EVO Tracker v13.2.2 Social Update
+WOACC EVO Tracker v13.3.0 Conditions Update
 ```
 
 Short release summary:
 
 ```text
-This release adds the new Discord Setup panel, weekly recaps, session notifications, license mode, license web page, improved import diagnostics, and better public URL handling for Caddy/reverse proxy setups.
+This release adds server condition tracking from Assetto Corsa EVO Server.txt, DRY/WET/RAIN labels, dry/wet filters, global community weekly recap, Discord/API condition metadata, invalid lap reasons, Spanish translations, and local-time matching for result files.
 ```
 
 ---
