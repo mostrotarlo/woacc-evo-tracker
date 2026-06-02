@@ -33,6 +33,25 @@ class Database:
         add("session_entries", "avg_all_lap_ms", "avg_all_lap_ms INTEGER")
         add("session_entries", "driver_category", "driver_category TEXT")
         add("drivers", "driver_category", "driver_category TEXT")
+        add("laps", "invalid_reason", "invalid_reason TEXT")
+        add("sessions", "weather_log_at", "weather_log_at TEXT")
+        add("sessions", "ambient_temperature_c", "ambient_temperature_c REAL")
+        add("sessions", "weather_type", "weather_type TEXT")
+        add("sessions", "sky_coverage", "sky_coverage REAL")
+        add("sessions", "gloominess", "gloominess REAL")
+        add("sessions", "precipitation", "precipitation REAL")
+        add("sessions", "fog", "fog REAL")
+        add("sessions", "humidity", "humidity REAL")
+        add("sessions", "pressure_psi", "pressure_psi REAL")
+        add("sessions", "wind_speed_m_s", "wind_speed_m_s REAL")
+        add("sessions", "wind_gust", "wind_gust REAL")
+        add("sessions", "wind_direction_deg", "wind_direction_deg REAL")
+        add("sessions", "initial_global_wetness", "initial_global_wetness REAL")
+        add("sessions", "is_dynamic_weather", "is_dynamic_weather INTEGER")
+        add("sessions", "initial_grip_label", "initial_grip_label TEXT")
+        add("sessions", "track_grip", "track_grip REAL")
+        add("sessions", "track_rubber", "track_rubber REAL")
+        add("sessions", "track_marbles", "track_marbles REAL")
 
         add("import_sources", "announce_records", "announce_records INTEGER NOT NULL DEFAULT 0")
         add("import_sources", "announce_name", "announce_name TEXT")
@@ -40,6 +59,7 @@ class Database:
         add("import_sources", "record_window_started_at", "record_window_started_at TEXT")
         add("import_sources", "weekly_recap_enabled", "weekly_recap_enabled INTEGER NOT NULL DEFAULT 0")
         add("import_sources", "weekly_recap_started_at", "weekly_recap_started_at TEXT")
+        add("import_sources", "server_log_path", "server_log_path TEXT")
 
         # Discord/session/license settings (v13.2 social)
         add("import_sources", "session_notify_enabled", "session_notify_enabled INTEGER NOT NULL DEFAULT 0")
@@ -79,6 +99,7 @@ CREATE TABLE IF NOT EXISTS import_sources (
     record_window_started_at TEXT,
     weekly_recap_enabled INTEGER NOT NULL DEFAULT 0,
     weekly_recap_started_at TEXT,
+    server_log_path TEXT,
     session_notify_enabled INTEGER NOT NULL DEFAULT 0,
     session_notify_webhook_url TEXT,
     session_notify_mode TEXT,
@@ -125,6 +146,24 @@ CREATE TABLE IF NOT EXISTS sessions (
     laps_total INTEGER NOT NULL DEFAULT 0,
     drivers_count INTEGER NOT NULL DEFAULT 0,
     best_lap_ms INTEGER,
+    weather_log_at TEXT,
+    ambient_temperature_c REAL,
+    weather_type TEXT,
+    sky_coverage REAL,
+    gloominess REAL,
+    precipitation REAL,
+    fog REAL,
+    humidity REAL,
+    pressure_psi REAL,
+    wind_speed_m_s REAL,
+    wind_gust REAL,
+    wind_direction_deg REAL,
+    initial_global_wetness REAL,
+    is_dynamic_weather INTEGER,
+    initial_grip_label TEXT,
+    track_grip REAL,
+    track_rubber REAL,
+    track_marbles REAL,
     FOREIGN KEY(server_id) REFERENCES servers(id),
     FOREIGN KEY(source_id) REFERENCES import_sources(id)
 );
@@ -171,6 +210,7 @@ CREATE TABLE IF NOT EXISTS laps (
     lap_number INTEGER NOT NULL,
     lap_time_ms INTEGER NOT NULL,
     is_valid INTEGER NOT NULL DEFAULT 0,
+    invalid_reason TEXT,
     flags INTEGER,
     s1_ms INTEGER,
     s2_ms INTEGER,

@@ -52,6 +52,11 @@
       <option value="{{ c.car_name }}" {% if selected_car == c.car_name %}selected{% endif %}>{{ c.car_name }}</option>
       {% endfor %}
     </select>
+    <select name="condition">
+      <option value="">{{ t('all_conditions', 'Tutte le condizioni') }}</option>
+      <option value="dry" {% if selected_condition=='dry' %}selected{% endif %}>{{ t('condition_dry', 'Asciutto') }}</option>
+      <option value="wet" {% if selected_condition=='wet' %}selected{% endif %}>{{ t('condition_wet', 'Bagnato') }}</option>
+    </select>
     <button>{{ t('filter') }}</button>
   </form>
 
@@ -59,6 +64,7 @@
     <div class="section-head">
       <h2>{% if selected_car %}{{ t('records_car_ranking', 'Classifica per auto') }}: {{ selected_car }}{% else %}{{ t('records_general_ranking', 'Classifica generale') }}{% endif %}</h2>
     </div>
+    <p class="muted">DRY/WET = pista asciutta/bagnata | RAIN = pioggia attiva | C = aria | G = grip | WIND = vento</p>
     <table class="leaderboard-table records-table">
       <thead>
         <tr>
@@ -68,6 +74,7 @@
           <th>{{ t('car') }}</th>
           <th class="col-best">{{ t('best_lap') }}</th>
           <th>{{ t('lap') }}</th>
+          <th>{{ t('conditions') }}</th>
           <th>{{ t('session') }}</th>
           <th>{{ t('server') }}</th>
           <th class="col-date">{{ t('date') }}</th>
@@ -82,12 +89,13 @@
           <td><div class="clip car" title="{{ r.car_name }}">{{ r.car_name }}</div></td>
           <td class="col-best"><strong>{{ r.best_lap_ms|lap_time }}</strong></td>
           <td>{{ r.lap_number }}</td>
+          <td>{{ conditions_label(r) or t('none') }}</td>
           <td>{{ r.session_type }}</td>
           <td><div class="clip" title="{{ r.server_name }}">{{ r.server_name }}</div></td>
           <td class="col-date">{{ r.session_datetime }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="empty">{{ t('no_results') }}</td></tr>
+        <tr><td colspan="10" class="empty">{{ t('no_results') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

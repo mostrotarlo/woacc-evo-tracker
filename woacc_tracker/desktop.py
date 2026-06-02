@@ -172,6 +172,7 @@ class TrackerDesktop:
         ttk.Button(top,text=self._t("desktop_edit_name", "✏️ Edit name"),command=self.edit_source_name).pack(side="left", padx=4)
         ttk.Button(top,text=self._t("desktop_remove", "❌ Remove"),command=self.remove_source).pack(side="left", padx=4)
         ttk.Button(top,text=self._t("desktop_toggle", "Enable/Disable"),command=self.toggle_source).pack(side="left", padx=4)
+        ttk.Button(top,text=self._t("desktop_select_server_log", "Select Assetto Corsa EVO Server.txt"),command=self.set_source_server_log).pack(side="left", padx=4)
 
         ttk.Button(
             top,
@@ -185,17 +186,27 @@ class TrackerDesktop:
             command=self.toggle_weekly_recap
         ).pack(side="left", padx=4)
 
+        ttk.Button(
+            top,
+            text=self._t("desktop_weekly_recap_webhook", "Webhook Recap"),
+            command=self.configure_weekly_recap_webhook
+        ).pack(side="left", padx=4)
+
+        self.weekly_recap_status_var = tk.StringVar(value="")
+        ttk.Label(top, textvariable=self.weekly_recap_status_var, font=("Segoe UI", 10, "bold")).pack(side="left", padx=12)
+        self._update_weekly_recap_status()
+
 
         self.sources_tree = ttk.Treeview(
             self.tab_sources,
             columns=(
                 "enabled",
                 "record",
-                "weekly",
                 "session",
                 "license",
                 "name",
                 "path",
+                "server_log",
                 "announce",
                 "webhook"
             ),
@@ -206,11 +217,11 @@ class TrackerDesktop:
         for col,label,width in [
             ("enabled", self._t("desktop_enabled", "Enabled"), 70),
             ("record", self._t("records", "Records"), 80),
-            ("weekly", self._t("desktop_recap", "Recap"), 80),
             ("session", self._t("sessions", "Sessions"), 80),
             ("license", self._t("licenses", "Licenses"), 80),
             ("name", self._t("desktop_name", "Name"), 180),
-            ("path", self._t("desktop_path", "Path"), 460),
+            ("path", self._t("desktop_path", "Path"), 360),
+            ("server_log", self._t("desktop_server_log", "Server log"), 120),
             ("announce", self._t("desktop_announce_name", "Announcement name"), 180),
             ("webhook", self._t("desktop_webhook", "Webhook"), 110),
         ]:
@@ -315,11 +326,11 @@ class TrackerDesktop:
                 values=(
                     self._t("yes", "Yes") if src.get("enabled",True) else self._t("no", "No"),
                     self._t("yes", "Yes") if src.get("announce_records") else self._t("no", "No"),
-                    self._t("yes", "Yes") if src.get("weekly_recap_enabled") else self._t("no", "No"),
                     self._t("yes", "Yes") if src.get("session_notify_enabled") else self._t("no", "No"),
                     self._t("yes", "Yes") if src.get("license_enabled") else self._t("no", "No"),
                     src.get("name",""),
                     src.get("path",""),
+                    self._t("desktop_set", "Set") if src.get("server_log_path") else self._t("no", "No"),
                     src.get("announce_name",""),
                     webhook
                 )
@@ -360,18 +371,22 @@ class TrackerDesktop:
             initialvalue=Path(path).name
         ) or Path(path).name
 
+        server_log_path = filedialog.askopenfilename(
+            title=self._t("desktop_select_server_log_file", "Select Assetto Corsa EVO Server.txt"),
+            filetypes=[("Assetto Corsa EVO Server.txt", "Assetto Corsa EVO Server.txt"), ("Text files", "*.txt"), ("All files", "*.*")]
+        )
+
         self.cfg.setdefault("sources", []).append({
             "name": name,
             "path": path,
             "enabled": True,
+            "server_log_path": server_log_path or "",
 
             "announce_records": False,
             "announce_name": name,
             "discord_webhook_url": "",
             "record_window_started_at": "",
 
-            "weekly_recap_enabled": False,
-            "weekly_recap_started_at": "",
             "session_notify_enabled": False,
             "session_notify_webhook_url": "",
             "session_notify_mode": "simple",
@@ -384,6 +399,28 @@ class TrackerDesktop:
 
         save_config(self.cfg)
         self._load_sources_to_tree()
+
+    def set_source_server_log(self):
+        idx = self._selected_source_index()
+        if idx is None:
+            messagebox.showwarning(
+                self._t("desktop_no_source_selected", "No server selected"),
+                self._t("desktop_select_source_first", "Select a server/folder first.")
+            )
+            return
+        current = self.cfg["sources"][idx].get("server_log_path") or ""
+        initial_dir = str(Path(current).parent) if current else str(Path(self.cfg["sources"][idx].get("path", "")).parent)
+        path = filedialog.askopenfilename(
+            title=self._t("desktop_select_server_log_file", "Select Assetto Corsa EVO Server.txt"),
+            initialdir=initial_dir,
+            filetypes=[("Assetto Corsa EVO Server.txt", "Assetto Corsa EVO Server.txt"), ("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        if not path:
+            return
+        self.cfg["sources"][idx]["server_log_path"] = path
+        save_config(self.cfg)
+        self._load_sources_to_tree()
+        self._log(self._t("desktop_server_log_saved", "Server log saved"))
 
     def _selected_source_index(self):
         sel = self.sources_tree.selection()
@@ -425,6 +462,10 @@ class TrackerDesktop:
     def setup_discord_source(self):
         idx = self._selected_source_index()
         if idx is None:
+            messagebox.showwarning(
+                self._t("desktop_no_source_selected", "No server selected"),
+                self._t("desktop_select_source_first", "Select a server/folder first.")
+            )
             return
 
         src = self.cfg["sources"][idx]
@@ -438,18 +479,15 @@ class TrackerDesktop:
         nb.pack(fill="both", expand=True, padx=10, pady=10)
 
         tab_records = ttk.Frame(nb, padding=12)
-        tab_weekly = ttk.Frame(nb, padding=12)
         tab_sessions = ttk.Frame(nb, padding=12)
         tab_license = ttk.Frame(nb, padding=12)
         nb.add(tab_records, text=self._t("discord_tab_records", "Record"))
-        nb.add(tab_weekly, text=self._t("discord_tab_weekly", "Weekly recap"))
         nb.add(tab_sessions, text=self._t("discord_tab_sessions", "Sessioni"))
         nb.add(tab_license, text=self._t("discord_tab_licenses", "Licenze"))
 
         record_enabled = tk.BooleanVar(value=bool(src.get("announce_records")))
         announce_name = tk.StringVar(value=src.get("announce_name") or src.get("name", ""))
         record_webhook = tk.StringVar(value=src.get("discord_webhook_url", ""))
-        weekly_enabled = tk.BooleanVar(value=bool(src.get("weekly_recap_enabled")))
 
         session_enabled = tk.BooleanVar(value=bool(src.get("session_notify_enabled")))
         session_webhook = tk.StringVar(value=src.get("session_notify_webhook_url", ""))
@@ -494,10 +532,6 @@ class TrackerDesktop:
         ttk.Entry(tab_records, textvariable=record_webhook, width=72).grid(row=2, column=1, sticky="w", pady=6)
         ttk.Button(tab_records, text=self._t("discord_clear_saved_records", "Cancella record salvati"), command=lambda: self._reset_source_records(src)).grid(row=3, column=1, sticky="w", pady=10)
 
-        # Weekly tab
-        ttk.Checkbutton(tab_weekly, text=self._t("discord_enable_weekly_recap", "Abilita recap settimanale record"), variable=weekly_enabled).grid(row=0, column=0, sticky="w", pady=6)
-        ttk.Label(tab_weekly, text=self._t("discord_weekly_help", "Usa il webhook record. Il recap mostra pista, pilota e tempo record.")).grid(row=1, column=0, columnspan=2, sticky="w", pady=6)
-
         # Sessions tab
         ttk.Checkbutton(tab_sessions, text=self._t("discord_enable_session_notifications", "Abilita notifica nuove sessioni"), variable=session_enabled).grid(row=0, column=0, sticky="w", pady=6)
         ttk.Label(tab_sessions, text=self._t("discord_sessions_webhook", "Webhook sessioni")).grid(row=1, column=0, sticky="w", pady=6)
@@ -537,12 +571,6 @@ class TrackerDesktop:
                 src["record_window_started_at"] = datetime.now().isoformat(timespec="seconds")
             if not src["announce_records"]:
                 src["record_window_started_at"] = ""
-
-            src["weekly_recap_enabled"] = bool(weekly_enabled.get())
-            if src["weekly_recap_enabled"] and not src.get("weekly_recap_started_at"):
-                src["weekly_recap_started_at"] = datetime.now().isoformat(timespec="seconds")
-            if not src["weekly_recap_enabled"]:
-                src["weekly_recap_started_at"] = ""
 
             src["session_notify_enabled"] = bool(session_enabled.get())
             src["session_notify_webhook_url"] = session_webhook.get().strip()
@@ -605,32 +633,54 @@ class TrackerDesktop:
 
 
     def toggle_weekly_recap(self):
-        idx = self._selected_source_index()
-        if idx is None:
+        if not (self.cfg.get("weekly_recap_webhook_url") or "").strip():
+            messagebox.showwarning(
+                self._t("desktop_missing_webhook", "Missing webhook"),
+                self._t("desktop_configure_recap_webhook_first", "Configure the recap webhook first.")
+            )
             return
 
-        src = self.cfg["sources"][idx]
+        enabled = not bool(self.cfg.get("weekly_recap_enabled"))
+        self.cfg["weekly_recap_enabled"] = enabled
 
-        if not src.get("announce_records"):
-            messagebox.showwarning(self._t("desktop_records_not_active", "Records not active"), self._t("desktop_enable_records_first", "Enable record announcements first."))
-            return
-
-        if not src.get("discord_webhook_url"):
-            messagebox.showwarning(self._t("desktop_missing_webhook", "Missing webhook"), self._t("desktop_configure_webhook_first", "Configure the webhook first."))
-            return
-
-        enabled = not bool(src.get("weekly_recap_enabled"))
-        src["weekly_recap_enabled"] = enabled
-
-        if enabled:
-            src["weekly_recap_started_at"] = datetime.now().isoformat(timespec="seconds")
-        else:
-            src["weekly_recap_started_at"] = ""
+        if enabled and not self.cfg.get("weekly_recap_started_at"):
+            self.cfg["weekly_recap_started_at"] = datetime.now().isoformat(timespec="seconds")
+        if not enabled:
+            self.cfg["weekly_recap_started_at"] = ""
+            self.cfg["weekly_recap_last_sent_at"] = ""
 
         save_config(self.cfg)
-        self._load_sources_to_tree()
+        self._update_weekly_recap_status()
 
-        self._log(self._t("desktop_weekly_recap_status", "Weekly recap {state} for {name}").format(state=(self._t("desktop_active", "active") if enabled else self._t("desktop_disabled", "disabled")), name=src.get("name")))
+        self._log(self._t("desktop_weekly_recap_global_status", "Community weekly recap {state}").format(state=(self._t("desktop_active", "active") if enabled else self._t("desktop_disabled", "disabled"))))
+
+    def configure_weekly_recap_webhook(self):
+        current = self.cfg.get("weekly_recap_webhook_url", "")
+        webhook = simpledialog.askstring(
+            self._t("desktop_weekly_recap_webhook", "Webhook Recap"),
+            self._t("desktop_weekly_recap_webhook_prompt", "Discord webhook for the community weekly recap:"),
+            initialvalue=current,
+        )
+        if webhook is None:
+            return
+        self.cfg["weekly_recap_webhook_url"] = webhook.strip()
+        save_config(self.cfg)
+        self._update_weekly_recap_status()
+        self._log(self._t("desktop_weekly_recap_webhook_saved", "Recap webhook saved"))
+
+    def _update_weekly_recap_status(self):
+        if not hasattr(self, "weekly_recap_status_var"):
+            return
+        enabled = bool(self.cfg.get("weekly_recap_enabled"))
+        has_webhook = bool((self.cfg.get("weekly_recap_webhook_url") or "").strip())
+        state = self._t("desktop_active", "active") if enabled else self._t("desktop_disabled", "disabled")
+        webhook = self._t("desktop_configured", "configured") if has_webhook else self._t("not_configured", "Not configured")
+        self.weekly_recap_status_var.set(
+            self._t("desktop_weekly_recap_status_label", "Recap: {state} | Webhook: {webhook}").format(
+                state=state,
+                webhook=webhook,
+            )
+        )
 
     def _update_urls(self):
         port = int(self.port_var.get()) if str(self.port_var.get()).isdigit() else self.cfg.get("port", 5055)

@@ -70,6 +70,66 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         def t(key: str, default: str | None = None) -> str:
             return str(vocab.get(key, default if default is not None else key))
 
+        def conditions_label(row: Any) -> str:
+            def get(key: str):
+                try:
+                    return row[key]
+                except Exception:
+                    return getattr(row, key, None)
+
+            has_data = bool(get("weather_log_at") or get("weather_type") or get("ambient_temperature_c") is not None)
+            if not has_data:
+                return ""
+
+            parts = []
+            precipitation = get("precipitation")
+            wetness = get("initial_global_wetness")
+            try:
+                is_rain = precipitation is not None and float(precipitation) > 0
+            except (TypeError, ValueError):
+                is_rain = False
+            try:
+                is_wet = is_rain or (wetness is not None and float(wetness) > 0)
+            except (TypeError, ValueError):
+                is_wet = is_rain
+            parts.append("WET" if is_wet else "DRY")
+            if is_rain:
+                try:
+                    parts.append(f"RAIN {float(precipitation):.2f}")
+                except (TypeError, ValueError):
+                    parts.append("RAIN")
+
+            temp = get("ambient_temperature_c")
+            if temp is not None:
+                try:
+                    parts.append(f"{float(temp):.1f}C")
+                except (TypeError, ValueError):
+                    pass
+
+            grip = get("track_grip")
+            if grip is not None:
+                try:
+                    parts.append(f"G {float(grip):.2f}")
+                except (TypeError, ValueError):
+                    pass
+            elif get("initial_grip_label"):
+                parts.append(str(get("initial_grip_label")))
+
+            if wetness is not None:
+                try:
+                    parts.append(f"WET {float(wetness):.2f}")
+                except (TypeError, ValueError):
+                    pass
+
+            wind = get("wind_speed_m_s")
+            if wind is not None:
+                try:
+                    parts.append(f"WIND {float(wind):.1f}")
+                except (TypeError, ValueError):
+                    pass
+
+            return " | ".join(parts)
+
         script_root = (request.script_root or "").rstrip("/")
         host = (request.host or "").split(":", 1)[0].lower()
         # In locale diretto (127.0.0.1:PORT) non forziamo cfg.base_path,
@@ -84,6 +144,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             "lang": lang,
             "languages": available_languages(),
             "t": t,
+            "conditions_label": conditions_label,
             "base_path": public_base_path,
         }
 
@@ -143,6 +204,19 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 return redirect(url_for("login", next=request.path))
             return fn(*args, **kwargs)
         return wrapper
+
+    def _condition_clause(alias: str, value: str) -> str:
+        has_conditions = (
+            f"(COALESCE({alias}.weather_log_at,'')<>'' "
+            f"OR {alias}.ambient_temperature_c IS NOT NULL "
+            f"OR COALESCE({alias}.weather_type,'')<>'')"
+        )
+        wet = f"(COALESCE({alias}.precipitation,0)>0 OR COALESCE({alias}.initial_global_wetness,0)>0)"
+        if value == "dry":
+            return f"{has_conditions} AND NOT {wet}"
+        if value == "wet":
+            return f"{has_conditions} AND {wet}"
+        return ""
 
     def local_only_required(fn):
         @wraps(fn)
@@ -233,15 +307,65 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         if not server:
             return "Server non trovato", 404
         bests = db.query(
-            """SELECT d.display_name, COALESCE(se.driver_category, d.driver_category, '') AS driver_category, se.car_name, MIN(se.best_lap_ms) AS best_lap_ms,
-                      SUM(se.laps_total) AS laps_total, SUM(se.laps_valid) AS laps_valid,
-                      sess.id AS session_id, sess.session_type, sess.session_datetime
-               FROM session_entries se
-               JOIN drivers d ON d.id=se.driver_id
-               JOIN sessions sess ON sess.id=se.session_id
-               WHERE sess.server_id=? AND se.best_lap_ms IS NOT NULL
-               GROUP BY se.driver_id, se.car_name
-               ORDER BY best_lap_ms ASC""",
+            """WITH filtered AS (
+                   SELECT
+                       se.driver_id,
+                       d.display_name,
+                       COALESCE(se.driver_category, d.driver_category, '') AS driver_category,
+                       se.car_name,
+                       se.best_lap_ms,
+                       se.laps_total,
+                       se.laps_valid,
+                       sess.id AS session_id,
+                       sess.session_type,
+                       sess.session_datetime,
+                       sess.weather_log_at,
+                       sess.ambient_temperature_c,
+                       sess.weather_type,
+                       sess.precipitation,
+                       sess.wind_speed_m_s,
+                       sess.initial_global_wetness,
+                       sess.initial_grip_label,
+                       sess.track_grip,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY se.driver_id, se.car_name
+                           ORDER BY se.best_lap_ms ASC, sess.session_datetime DESC
+                       ) AS rn
+                   FROM session_entries se
+                   JOIN drivers d ON d.id=se.driver_id
+                   JOIN sessions sess ON sess.id=se.session_id
+                   WHERE sess.server_id=? AND se.best_lap_ms IS NOT NULL
+               ), totals AS (
+                   SELECT
+                       driver_id,
+                       car_name,
+                       SUM(laps_total) AS laps_total,
+                       SUM(laps_valid) AS laps_valid
+                   FROM filtered
+                   GROUP BY driver_id, car_name
+               )
+               SELECT
+                   filtered.display_name,
+                   filtered.driver_category,
+                   filtered.car_name,
+                   filtered.best_lap_ms,
+                   totals.laps_total,
+                   totals.laps_valid,
+                   filtered.session_id,
+                   filtered.session_type,
+                   filtered.session_datetime,
+                   filtered.weather_log_at,
+                   filtered.ambient_temperature_c,
+                   filtered.weather_type,
+                   filtered.precipitation,
+                   filtered.wind_speed_m_s,
+                   filtered.initial_global_wetness,
+                   filtered.initial_grip_label,
+                   filtered.track_grip
+               FROM filtered
+               JOIN totals ON totals.driver_id=filtered.driver_id AND totals.car_name=filtered.car_name
+               WHERE filtered.rn=1
+               ORDER BY filtered.best_lap_ms ASC""",
             (server_id,),
         )
         sessions_rows = db.query("SELECT * FROM sessions WHERE server_id=? ORDER BY session_datetime DESC", (server_id,))
@@ -269,6 +393,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
     def sessions_page():
         q = (request.args.get("q") or "").strip().lower()
         stype = request.args.get("type") or ""
+        condition = (request.args.get("condition") or "").strip().lower()
         params = []
         clauses = []
         if q:
@@ -277,6 +402,9 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         if stype:
             clauses.append("sess.session_type=?")
             params.append(stype)
+        condition_sql = _condition_clause("sess", condition)
+        if condition_sql:
+            clauses.append(condition_sql)
         where = "WHERE " + " AND ".join(clauses) if clauses else ""
         rows = db.query(
             f"""SELECT sess.*, srv.server_name, srv.track_name
@@ -286,7 +414,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             tuple(params),
         )
         types = db.query("SELECT DISTINCT session_type FROM sessions ORDER BY session_type")
-        return render_template("sessions.html", cfg=cfg, sessions=rows, q=q, stype=stype, types=types)
+        return render_template("sessions.html", cfg=cfg, sessions=rows, q=q, stype=stype, condition=condition, types=types)
 
     @app.route("/session/<int:session_id>")
     @login_required
@@ -323,6 +451,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         server_q = (request.args.get("server_q") or "").strip()
         track = (request.args.get("track") or "").strip()
         stype = (request.args.get("type") or "").strip()
+        condition = (request.args.get("condition") or "").strip().lower()
 
         track_clauses = []
         track_params = []
@@ -351,6 +480,9 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         if stype:
             clauses.append("sess.session_type = ?")
             params.append(stype)
+        condition_sql = _condition_clause("sess", condition)
+        if condition_sql:
+            clauses.append(condition_sql)
         where = "WHERE " + " AND ".join(clauses)
 
         rows = db.query(
@@ -363,6 +495,14 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                         sess.id AS session_id,
                         sess.session_type,
                         sess.session_datetime,
+                        sess.weather_log_at,
+                        sess.ambient_temperature_c,
+                        sess.weather_type,
+                        sess.precipitation,
+                        sess.initial_global_wetness,
+                        sess.initial_grip_label,
+                        sess.track_grip,
+                        sess.wind_speed_m_s,
                         srv.server_name,
                         srv.track_name
                     FROM session_entries se
@@ -400,6 +540,14 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                     best_rows.session_id,
                     best_rows.session_type,
                     best_rows.session_datetime,
+                    best_rows.weather_log_at,
+                    best_rows.ambient_temperature_c,
+                    best_rows.weather_type,
+                    best_rows.precipitation,
+                    best_rows.initial_global_wetness,
+                    best_rows.initial_grip_label,
+                    best_rows.track_grip,
+                    best_rows.wind_speed_m_s,
                     best_rows.server_name,
                     best_rows.track_name
                 FROM best_rows
@@ -418,6 +566,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             server_q=server_q,
             track=track,
             stype=stype,
+            condition=condition,
         )
 
     @app.route("/records")
@@ -426,6 +575,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         selected_track = (request.args.get("track") or "").strip()
         selected_layout = (request.args.get("layout") or "").strip()
         selected_car = (request.args.get("car") or "").strip()
+        selected_condition = (request.args.get("condition") or "").strip().lower()
 
         tracks = db.query(
             """
@@ -497,6 +647,9 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             if selected_car:
                 car_filter = "AND se.car_name = ?"
                 params.append(selected_car)
+            condition_filter = _condition_clause("sess", selected_condition)
+            if condition_filter:
+                condition_filter = f"AND {condition_filter}"
 
             rows = db.query(
                 f"""
@@ -512,6 +665,24 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                         sess.id AS session_id,
                         sess.session_type,
                         sess.session_datetime,
+                        sess.weather_log_at,
+                        sess.ambient_temperature_c,
+                        sess.weather_type,
+                        sess.sky_coverage,
+                        sess.gloominess,
+                        sess.precipitation,
+                        sess.fog,
+                        sess.humidity,
+                        sess.pressure_psi,
+                        sess.wind_speed_m_s,
+                        sess.wind_gust,
+                        sess.wind_direction_deg,
+                        sess.initial_global_wetness,
+                        sess.is_dynamic_weather,
+                        sess.initial_grip_label,
+                        sess.track_grip,
+                        sess.track_rubber,
+                        sess.track_marbles,
                         srv.server_name,
                         srv.track_name,
                         COALESCE(srv.track_layout, '') AS track_layout,
@@ -528,6 +699,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                       AND srv.track_name = ?
                       AND COALESCE(srv.track_layout, '') = ?
                       {car_filter}
+                      {condition_filter}
                 )
                 SELECT *
                 FROM ranked
@@ -546,6 +718,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             selected_track=selected_track,
             selected_layout=selected_layout,
             selected_car=selected_car,
+            selected_condition=selected_condition,
             current_track=current_track,
         )
 
@@ -790,6 +963,24 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                     sess.is_completed,
                     sess.laps_total,
                     sess.drivers_count,
+                    sess.weather_log_at,
+                    sess.ambient_temperature_c,
+                    sess.weather_type,
+                    sess.sky_coverage,
+                    sess.gloominess,
+                    sess.precipitation,
+                    sess.fog,
+                    sess.humidity,
+                    sess.pressure_psi,
+                    sess.wind_speed_m_s,
+                    sess.wind_gust,
+                    sess.wind_direction_deg,
+                    sess.initial_global_wetness,
+                    sess.is_dynamic_weather,
+                    sess.initial_grip_label,
+                    sess.track_grip,
+                    sess.track_rubber,
+                    sess.track_marbles,
                     srv.server_name,
                     srv.track_name,
                     srv.track_layout
@@ -829,6 +1020,26 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 "is_completed": bool(r["is_completed"]) if r["is_completed"] is not None else None,
                 "laps_total": r["laps_total"],
                 "drivers_count": r["drivers_count"],
+                "conditions": {
+                    "weather_log_at": r["weather_log_at"],
+                    "ambient_temperature_c": r["ambient_temperature_c"],
+                    "weather_type": r["weather_type"],
+                    "sky_coverage": r["sky_coverage"],
+                    "gloominess": r["gloominess"],
+                    "precipitation": r["precipitation"],
+                    "fog": r["fog"],
+                    "humidity": r["humidity"],
+                    "pressure_psi": r["pressure_psi"],
+                    "wind_speed_m_s": r["wind_speed_m_s"],
+                    "wind_gust": r["wind_gust"],
+                    "wind_direction_deg": r["wind_direction_deg"],
+                    "initial_global_wetness": r["initial_global_wetness"],
+                    "is_dynamic_weather": bool(r["is_dynamic_weather"]) if r["is_dynamic_weather"] is not None else None,
+                    "initial_grip_label": r["initial_grip_label"],
+                    "track_grip": r["track_grip"],
+                    "track_rubber": r["track_rubber"],
+                    "track_marbles": r["track_marbles"],
+                },
                 "download_url": download_url,
             })
 

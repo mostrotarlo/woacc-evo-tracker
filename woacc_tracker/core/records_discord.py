@@ -1,10 +1,10 @@
 import json
 import urllib.error
 import urllib.request
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from .utils import ms_to_time
 from .translations import DEFAULT_LANGUAGE, load_vocabulary
+from .utils import ms_to_time
 
 
 def _tr(lang: str, key: str, default: str) -> str:
@@ -28,9 +28,9 @@ def _post_discord(webhook_url: str, payload: Dict[str, Any], lang: str = DEFAULT
         data=data,
         headers={
             "Content-Type": "application/json",
-            "User-Agent": "WOACC-Tracker/1.1"
+            "User-Agent": "WOACC-Tracker/1.1",
         },
-        method="POST"
+        method="POST",
     )
 
     try:
@@ -50,6 +50,65 @@ def _post_discord(webhook_url: str, payload: Dict[str, Any], lang: str = DEFAULT
         return False, str(exc)
 
 
+def _format_conditions(conditions: Optional[Dict[str, Any]], lang: str = DEFAULT_LANGUAGE) -> str:
+    if not conditions:
+        return ""
+
+    parts = []
+    precipitation = conditions.get("precipitation")
+    wetness = conditions.get("initial_global_wetness")
+    try:
+        is_rain = precipitation is not None and float(precipitation) > 0
+    except (TypeError, ValueError):
+        is_rain = False
+    try:
+        is_wet = is_rain or (wetness is not None and float(wetness) > 0)
+    except (TypeError, ValueError):
+        is_wet = is_rain
+    parts.append("WET" if is_wet else "DRY")
+    if is_rain:
+        try:
+            parts.append(f"RAIN {float(precipitation):.2f}")
+        except (TypeError, ValueError):
+            parts.append("RAIN")
+
+    weather = conditions.get("weather_type") or ""
+    if weather:
+        parts.append(str(weather))
+
+    temp = conditions.get("ambient_temperature_c")
+    if temp is not None:
+        try:
+            parts.append(f"{float(temp):.1f}C")
+        except (TypeError, ValueError):
+            pass
+
+    grip = conditions.get("track_grip")
+    grip_label = conditions.get("initial_grip_label") or ""
+    if grip is not None:
+        try:
+            parts.append(f"G {float(grip):.2f}")
+        except (TypeError, ValueError):
+            pass
+    elif grip_label:
+        parts.append(f"{_tr(lang, 'track_grip', 'Track grip')} {grip_label}")
+
+    if wetness is not None:
+        try:
+            parts.append(f"WET {float(wetness):.2f}")
+        except (TypeError, ValueError):
+            pass
+
+    wind = conditions.get("wind_speed_m_s")
+    if wind is not None:
+        try:
+            parts.append(f"WIND {float(wind):.1f}")
+        except (TypeError, ValueError):
+            pass
+
+    return " | ".join(parts)
+
+
 def post_discord_record(
     webhook_url: str,
     announce_name: str,
@@ -61,32 +120,41 @@ def post_discord_record(
     session_type: str,
     session_datetime: str,
     old_lap_ms: Optional[int] = None,
+    conditions: Optional[Dict[str, Any]] = None,
     lang: str = DEFAULT_LANGUAGE,
 ) -> tuple[bool, str]:
 
     track_label = f"{track_name}{(' / ' + track_layout) if track_layout else ''}"
-    title = _tr(lang, "discord_first_record_title", "🏁 First event record") if old_lap_ms is None else _tr(lang, "discord_new_record_title", "🚀 New track record")
+    title = (
+        _tr(lang, "discord_first_record_title", "First event record")
+        if old_lap_ms is None
+        else _tr(lang, "discord_new_record_title", "New track record")
+    )
 
     description = _tr(
         lang,
         "discord_record_description",
-        "**{driver}** set a new benchmark on **{track}**"
+        "**{driver}** set a new benchmark on **{track}**",
     ).format(driver=driver_name, track=track_label)
 
     fields = [
         {"name": _tr(lang, "discord_event", "Event"), "value": announce_name or "WOACC Tracker", "inline": False},
         {"name": _tr(lang, "discord_track", "Track"), "value": track_label, "inline": True},
         {"name": _tr(lang, "discord_time", "Time"), "value": f"**{ms_to_time(lap_ms)}**", "inline": True},
-        {"name": _tr(lang, "discord_driver", "Driver"), "value": driver_name or "—", "inline": True},
-        {"name": _tr(lang, "discord_car", "Car"), "value": car_name or "—", "inline": True},
-        {"name": _tr(lang, "discord_session", "Session"), "value": session_type or "—", "inline": True},
-        {"name": _tr(lang, "discord_date", "Date"), "value": session_datetime or "—", "inline": True},
+        {"name": _tr(lang, "discord_driver", "Driver"), "value": driver_name or "-", "inline": True},
+        {"name": _tr(lang, "discord_car", "Car"), "value": car_name or "-", "inline": True},
+        {"name": _tr(lang, "discord_session", "Session"), "value": session_type or "-", "inline": True},
+        {"name": _tr(lang, "discord_date", "Date"), "value": session_datetime or "-", "inline": True},
     ]
 
     if old_lap_ms:
         improvement = old_lap_ms - lap_ms
         fields.append({"name": _tr(lang, "discord_previous_record", "Previous record"), "value": ms_to_time(old_lap_ms), "inline": True})
         fields.append({"name": _tr(lang, "discord_improvement", "Improvement"), "value": f"-{improvement / 1000:.3f}s", "inline": True})
+
+    condition_text = _format_conditions(conditions, lang)
+    if condition_text:
+        fields.append({"name": _tr(lang, "conditions", "Conditions"), "value": condition_text, "inline": False})
 
     payload = {
         "username": "WOACC Tracker",
@@ -97,10 +165,10 @@ def post_discord_record(
                 "color": 3068284,
                 "fields": fields,
                 "footer": {
-                    "text": "WOACC Tracker • Record Event"
-                }
+                    "text": "WOACC Tracker - Record Event",
+                },
             }
-        ]
+        ],
     }
 
     return _post_discord(webhook_url, payload, lang)
@@ -124,12 +192,17 @@ def post_discord_weekly_recap(
         track = r.get("track_name") or "Unknown track"
         layout = r.get("track_layout") or ""
         track_label = f"{track}{(' / ' + layout) if layout else ''}"
+        car = r.get("car_name") or ""
+        condition_text = _format_conditions(r, lang)
 
-        lines.append(
-            f"**{idx}. {track_label}**\n"
-            f"👤 {r.get('driver_name') or '—'}\n"
-            f"⏱️ **{ms_to_time(int(r.get('lap_ms') or 0))}**"
-        )
+        details = [f"**{idx}. {track_label}**", f"Driver: {r.get('driver_name') or '-'}"]
+        time_line = f"Time: **{ms_to_time(int(r.get('lap_ms') or 0))}**"
+        if car:
+            time_line += f" - {car}"
+        details.append(time_line)
+        if condition_text:
+            details.append(condition_text)
+        lines.append("\n".join(details))
 
     extra = ""
     if len(records) > 40:
@@ -139,19 +212,19 @@ def post_discord_weekly_recap(
         "username": "WOACC Tracker",
         "embeds": [
             {
-                "title": _tr(lang, "discord_weekly_recap_title", "📊 Weekly record recap"),
+                "title": _tr(lang, "discord_weekly_recap_title", "Weekly record recap"),
                 "description": "\n\n".join(lines) + extra,
                 "color": 5814783,
                 "fields": [
                     {"name": _tr(lang, "discord_event", "Event"), "value": announce_name or "WOACC Tracker", "inline": True},
-                    {"name": _tr(lang, "discord_period", "Period"), "value": f"{period_start} → {period_end}", "inline": False},
+                    {"name": _tr(lang, "discord_period", "Period"), "value": f"{period_start} -> {period_end}", "inline": False},
                     {"name": _tr(lang, "discord_records_detected", "Records detected"), "value": str(len(records)), "inline": True},
                 ],
                 "footer": {
-                    "text": "WOACC Tracker • Weekly Record Recap"
-                }
+                    "text": "WOACC Tracker - Weekly Record Recap",
+                },
             }
-        ]
+        ],
     }
 
     return _post_discord(webhook_url, payload, lang)

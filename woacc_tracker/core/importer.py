@@ -8,9 +8,10 @@ from .parser import parse_evo_results, file_sha256
 from .records_discord import post_discord_record, post_discord_weekly_recap
 from .discord_notifications import post_session_notification
 from .licenses import process_license_notifications
-from .utils import normalize_text
-from .config import load_config
+from .utils import normalize_text, parse_datetime_from_filename
+from .config import load_config, save_config
 from .translations import DEFAULT_LANGUAGE
+from .server_log import find_session_weather
 import traceback
 
 
@@ -41,6 +42,7 @@ class Importer:
 
         weekly_recap_enabled = 1 if source_cfg.get("weekly_recap_enabled") else 0
         weekly_recap_started_at = source_cfg.get("weekly_recap_started_at") or None
+        server_log_path = (source_cfg.get("server_log_path") or "").strip()
 
         session_notify_enabled = 1 if source_cfg.get("session_notify_enabled") else 0
         session_notify_webhook_url = (source_cfg.get("session_notify_webhook_url") or "").strip()
@@ -65,6 +67,7 @@ class Importer:
                        record_window_started_at=?,
                        weekly_recap_enabled=?,
                        weekly_recap_started_at=?,
+                       server_log_path=?,
                        session_notify_enabled=?,
                        session_notify_webhook_url=?,
                        session_notify_mode=?,
@@ -83,6 +86,7 @@ class Importer:
                     window,
                     weekly_recap_enabled,
                     weekly_recap_started_at,
+                    server_log_path,
                     session_notify_enabled,
                     session_notify_webhook_url,
                     session_notify_mode,
@@ -108,6 +112,7 @@ class Importer:
                 record_window_started_at,
                 weekly_recap_enabled,
                 weekly_recap_started_at,
+                server_log_path,
                 session_notify_enabled,
                 session_notify_webhook_url,
                 session_notify_mode,
@@ -117,7 +122,7 @@ class Importer:
                 license_levels_json,
                 license_started_at
             )
-            VALUES(?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            VALUES(?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 name,
                 str(folder),
@@ -128,6 +133,7 @@ class Importer:
                 window,
                 weekly_recap_enabled,
                 weekly_recap_started_at,
+                server_log_path,
                 session_notify_enabled,
                 session_notify_webhook_url,
                 session_notify_mode,
@@ -174,8 +180,10 @@ class Importer:
         try:
             fhash = file_sha256(path)
 
-            existing = self.db.one("SELECT status FROM import_files WHERE file_hash=?", (fhash,))
+            existing = self.db.one("SELECT status, source_id, session_id FROM import_files WHERE file_hash=?", (fhash,))
             if existing:
+                self._refresh_session_datetime(existing["session_id"], path)
+                self._refresh_session_weather(source_id or existing["source_id"], existing["session_id"])
                 return "skipped"
 
             parsed = parse_evo_results(path)
@@ -214,6 +222,8 @@ class Importer:
             return "error"
 
     def _save_parsed(self, parsed: Dict, source_id: Optional[int]) -> int:
+        weather = self._weather_for_session(source_id, parsed)
+
         server = self.db.one(
             "SELECT id, first_session_at, last_session_at FROM servers WHERE server_key=?",
             (parsed["server_key"],),
@@ -262,9 +272,27 @@ class Importer:
                 is_completed,
                 laps_total,
                 drivers_count,
-                best_lap_ms
+                best_lap_ms,
+                weather_log_at,
+                ambient_temperature_c,
+                weather_type,
+                sky_coverage,
+                gloominess,
+                precipitation,
+                fog,
+                humidity,
+                pressure_psi,
+                wind_speed_m_s,
+                wind_gust,
+                wind_direction_deg,
+                initial_global_wetness,
+                is_dynamic_weather,
+                initial_grip_label,
+                track_grip,
+                track_rubber,
+                track_marbles
             )
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 server_id,
                 source_id,
@@ -277,6 +305,24 @@ class Importer:
                 parsed.get("laps_total") or 0,
                 parsed.get("drivers_count") or 0,
                 parsed.get("best_lap_ms"),
+                weather.get("weather_log_at") or "",
+                weather.get("ambient_temperature_c"),
+                weather.get("weather_type") or "",
+                weather.get("sky_coverage"),
+                weather.get("gloominess"),
+                weather.get("precipitation"),
+                weather.get("fog"),
+                weather.get("humidity"),
+                weather.get("pressure_psi"),
+                weather.get("wind_speed_m_s"),
+                weather.get("wind_gust"),
+                weather.get("wind_direction_deg"),
+                weather.get("initial_global_wetness"),
+                1 if weather.get("is_dynamic_weather") else 0 if "is_dynamic_weather" in weather else None,
+                weather.get("initial_grip_label") or "",
+                weather.get("track_grip"),
+                weather.get("track_rubber"),
+                weather.get("track_marbles"),
             ),
         )
         session_id = int(cur.lastrowid)
@@ -334,17 +380,19 @@ class Importer:
                         lap_number,
                         lap_time_ms,
                         is_valid,
+                        invalid_reason,
                         flags,
                         s1_ms,
                         s2_ms,
                         s3_ms
                     )
-                    VALUES(?,?,?,?,?,?,?,?)""",
+                    VALUES(?,?,?,?,?,?,?,?,?)""",
                     (
                         entry_id,
                         lap["lap_number"],
                         lap["lap_time_ms"],
                         1 if lap.get("is_valid") else 0,
+                        lap.get("invalid_reason") or "",
                         lap.get("flags"),
                         lap.get("s1_ms"),
                         lap.get("s2_ms"),
@@ -353,6 +401,154 @@ class Importer:
                 )
 
         return session_id
+
+    def _weather_for_session(self, source_id: Optional[int], parsed: Dict) -> Dict:
+        if not source_id:
+            return {}
+        src = self.db.one("SELECT server_log_path FROM import_sources WHERE id=?", (source_id,))
+        if not src or not (src["server_log_path"] or "").strip():
+            return {}
+        try:
+            weather = find_session_weather(
+                src["server_log_path"],
+                parsed.get("session_datetime") or "",
+                parsed.get("server_name") or "",
+                parsed.get("track_name") or "",
+                parsed.get("track_layout") or "",
+            )
+            if weather:
+                return weather
+
+            file_path = parsed.get("file_path") or ""
+            if file_path and Path(file_path).exists():
+                file_dt = datetime.fromtimestamp(Path(file_path).stat().st_mtime).isoformat(timespec="seconds")
+                return find_session_weather(
+                    src["server_log_path"],
+                    file_dt,
+                    parsed.get("server_name") or "",
+                    parsed.get("track_name") or "",
+                    parsed.get("track_layout") or "",
+                )
+            return {}
+        except Exception as exc:
+            self.log(f"Meteo log skip: {exc}")
+            return {}
+
+    def _refresh_session_weather(self, source_id: Optional[int], session_id: Optional[int]) -> None:
+        if not source_id or not session_id:
+            return
+        sess = self.db.one(
+            """SELECT sess.*, srv.server_name, srv.track_name, srv.track_layout
+               FROM sessions sess
+               JOIN servers srv ON srv.id=sess.server_id
+               WHERE sess.id=?""",
+            (session_id,),
+        )
+        if not sess:
+            return
+        weather = self._weather_for_session(source_id, {
+            "session_datetime": sess["session_datetime"],
+            "server_name": sess["server_name"],
+            "track_name": sess["track_name"],
+            "track_layout": sess["track_layout"],
+            "file_path": sess["file_path"],
+        })
+        if not weather:
+            return
+        self.db.execute(
+            """UPDATE sessions
+               SET weather_log_at=?,
+                   ambient_temperature_c=?,
+                   weather_type=?,
+                   sky_coverage=?,
+                   gloominess=?,
+                   precipitation=?,
+                   fog=?,
+                   humidity=?,
+                   pressure_psi=?,
+                   wind_speed_m_s=?,
+                   wind_gust=?,
+                   wind_direction_deg=?,
+                   initial_global_wetness=?,
+                   is_dynamic_weather=?,
+                   initial_grip_label=?,
+                   track_grip=?,
+                   track_rubber=?,
+                   track_marbles=?
+               WHERE id=?""",
+            (
+                weather.get("weather_log_at") or "",
+                weather.get("ambient_temperature_c"),
+                weather.get("weather_type") or "",
+                weather.get("sky_coverage"),
+                weather.get("gloominess"),
+                weather.get("precipitation"),
+                weather.get("fog"),
+                weather.get("humidity"),
+                weather.get("pressure_psi"),
+                weather.get("wind_speed_m_s"),
+                weather.get("wind_gust"),
+                weather.get("wind_direction_deg"),
+                weather.get("initial_global_wetness"),
+                1 if weather.get("is_dynamic_weather") else 0 if "is_dynamic_weather" in weather else None,
+                weather.get("initial_grip_label") or "",
+                weather.get("track_grip"),
+                weather.get("track_rubber"),
+                weather.get("track_marbles"),
+                session_id,
+            ),
+        )
+        self.log(f"Condizioni aggiornate per sessione {session_id}: {weather.get('weather_log_at')}")
+
+    def _refresh_session_datetime(self, session_id: Optional[int], path: Path) -> None:
+        if not session_id:
+            return
+        sess = self.db.one("SELECT id, server_id, session_datetime FROM sessions WHERE id=?", (session_id,))
+        if not sess:
+            return
+        new_dt = parse_datetime_from_filename(str(path))
+        if not new_dt or new_dt == sess["session_datetime"]:
+            return
+        self.db.execute("UPDATE sessions SET session_datetime=? WHERE id=?", (new_dt, session_id))
+        bounds = self.db.one(
+            "SELECT MIN(session_datetime) AS first_at, MAX(session_datetime) AS last_at FROM sessions WHERE server_id=?",
+            (sess["server_id"],),
+        )
+        if bounds:
+            self.db.execute(
+                "UPDATE servers SET first_session_at=?, last_session_at=? WHERE id=?",
+                (bounds["first_at"], bounds["last_at"], sess["server_id"]),
+            )
+        self.log(f"Orario locale aggiornato per sessione {session_id}: {new_dt}")
+
+    def _session_conditions(self, session_id: Optional[int]) -> Dict:
+        if not session_id:
+            return {}
+        row = self.db.one(
+            """SELECT
+                   weather_log_at,
+                   ambient_temperature_c,
+                   weather_type,
+                   sky_coverage,
+                   gloominess,
+                   precipitation,
+                   fog,
+                   humidity,
+                   pressure_psi,
+                   wind_speed_m_s,
+                   wind_gust,
+                   wind_direction_deg,
+                   initial_global_wetness,
+                   is_dynamic_weather,
+                   initial_grip_label,
+                   track_grip,
+                   track_rubber,
+                   track_marbles
+               FROM sessions
+               WHERE id=?""",
+            (session_id,),
+        )
+        return dict(row) if row else {}
 
 
     def _check_and_announce_session(self, source_id: Optional[int], parsed: Dict, session_id: int) -> None:
@@ -592,6 +788,7 @@ class Importer:
                 r["session_type"],
                 r["session_datetime"],
                 old_lap,
+                self._session_conditions(r["session_id"]),
                 self._notification_language(),
             )
 
@@ -640,84 +837,86 @@ class Importer:
         self.pending_record_candidates.clear()
 
     def check_weekly_recaps(self) -> None:
+        cfg = load_config()
+        if not cfg.get("weekly_recap_enabled"):
+            return
+
+        webhook = (cfg.get("weekly_recap_webhook_url") or "").strip()
+        if not webhook:
+            return
+
         now_dt = datetime.now()
         now = now_dt.isoformat(timespec="seconds")
 
-        sources = self.db.query(
-            """SELECT *
-               FROM import_sources
-               WHERE announce_records=1
-                 AND weekly_recap_enabled=1
-                 AND COALESCE(discord_webhook_url,'')<>''"""
+        last_raw = cfg.get("weekly_recap_last_sent_at") or cfg.get("weekly_recap_started_at") or now
+        last_dt = datetime.fromisoformat(last_raw)
+
+        if now_dt < last_dt + timedelta(days=7):
+            return
+
+        rows = self.db.query(
+            """WITH ranked AS (
+                   SELECT
+                       srv.track_name,
+                       COALESCE(srv.track_layout, '') AS track_layout,
+                       l.lap_time_ms AS lap_ms,
+                       d.display_name AS driver_name,
+                       se.car_name,
+                       sess.session_type,
+                       sess.session_datetime,
+                       sess.id AS session_id,
+                       sess.weather_log_at,
+                       sess.ambient_temperature_c,
+                       sess.weather_type,
+                       sess.sky_coverage,
+                       sess.gloominess,
+                       sess.precipitation,
+                       sess.fog,
+                       sess.humidity,
+                       sess.pressure_psi,
+                       sess.wind_speed_m_s,
+                       sess.wind_gust,
+                       sess.wind_direction_deg,
+                       sess.initial_global_wetness,
+                       sess.is_dynamic_weather,
+                       sess.initial_grip_label,
+                       sess.track_grip,
+                       sess.track_rubber,
+                       sess.track_marbles,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY srv.track_name, COALESCE(srv.track_layout, '')
+                           ORDER BY l.lap_time_ms ASC, sess.session_datetime DESC, l.lap_number ASC
+                       ) AS rn
+                   FROM laps l
+                   JOIN session_entries se ON se.id = l.entry_id
+                   JOIN drivers d ON d.id = se.driver_id
+                   JOIN sessions sess ON sess.id = se.session_id
+                   JOIN servers srv ON srv.id = sess.server_id
+                   WHERE l.is_valid = 1
+                     AND srv.track_name IS NOT NULL
+                     AND srv.track_name <> ''
+               )
+               SELECT *
+               FROM ranked
+               WHERE rn = 1
+               ORDER BY track_name ASC, track_layout ASC"""
         )
 
-        for src in sources:
-            source_id = int(src["id"])
+        records = [dict(r) for r in rows]
 
-            last = self.db.one(
-                """SELECT *
-                   FROM record_weekly_recaps
-                   WHERE source_id=?
-                   ORDER BY sent_at DESC
-                   LIMIT 1""",
-                (source_id,),
-            )
+        ok, msg = post_discord_weekly_recap(
+            webhook,
+            cfg.get("community_name") or "WOACC Tracker",
+            last_raw,
+            now,
+            records,
+            self._notification_language(),
+        )
 
-            if last:
-                period_start = last["period_end"]
-                last_dt = datetime.fromisoformat(last["period_end"])
-            else:
-                start_raw = src["weekly_recap_started_at"] or src["record_window_started_at"] or now
-                last_dt = datetime.fromisoformat(start_raw)
-                period_start = start_raw
+        cfg["weekly_recap_last_sent_at"] = now
+        save_config(cfg)
 
-            if now_dt < last_dt + timedelta(days=7):
-                continue
-
-            period_end = now
-
-            rows = self.db.query(
-                """SELECT *
-                   FROM record_events
-                   WHERE source_id=?
-                     AND announced_at>=?
-                     AND announced_at<?
-                   ORDER BY track_name ASC, lap_ms ASC""",
-                (source_id, period_start, period_end),
-            )
-
-            records = [dict(r) for r in rows]
-
-            ok, msg = post_discord_weekly_recap(
-                src["discord_webhook_url"] or "",
-                src["announce_name"] or src["name"],
-                period_start,
-                period_end,
-                records,
-                self._notification_language(),
-            )
-
-            self.db.execute(
-                """INSERT INTO record_weekly_recaps(
-                    source_id,
-                    period_start,
-                    period_end,
-                    sent_at,
-                    records_count,
-                    discord_status
-                )
-                VALUES(?,?,?,?,?,?)""",
-                (
-                    source_id,
-                    period_start,
-                    period_end,
-                    now,
-                    len(records),
-                    msg,
-                ),
-            )
-
-            self.log(f"Recap settimanale record {src['name']}: {len(records)} record - Discord: {msg}")
+        self.log(f"Recap settimanale community: {len(records)} record - Discord: {msg}")
 
     def _upsert_driver(self, entry: Dict, seen_at: str) -> int:
         steam_id = entry.get("steam_id")

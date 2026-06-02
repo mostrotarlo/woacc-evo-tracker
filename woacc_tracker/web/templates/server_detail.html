@@ -1,90 +1,76 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-head"><a href="{{ url_for('servers') }}">{{ t('back_servers') }}</a><h1>{{ server.server_name }}</h1><p>{{ server.track_name }}{% if server.track_layout %} / {{ server.track_layout }}{% endif %}</p><p>{{ t('first_session') }}: {{ server.first_session_at or t('none') }} · {{ t('last_session_col') }}: {{ server.last_session_at or t('none') }}</p></div>
+<div class="page-head">
+  <a href="{{ url_for('servers') }}">{{ t('back_servers') }}</a>
+  <h1>{{ server.server_name }}</h1>
+  <p>{{ server.track_name }}{% if server.track_layout %} / {{ server.track_layout }}{% endif %}</p>
+  <p>{{ t('first_session') }}: {{ server.first_session_at or t('none') }} - {{ t('last_session_col') }}: {{ server.last_session_at or t('none') }}</p>
+</div>
 
 <section class="panel">
-<h2>{{ t('record_monitoring') }}</h2>
-
-<table>
-<thead>
-<tr>
-<th>{{ t('source') }}</th>
-<th>{{ t('discord_records') }}</th>
-<th>{{ t('weekly_recap') }}</th>
-<th>{{ t('announcement_name') }}</th>
-<th>{{ t('webhook') }}</th>
-<th>{{ t('record_window_from') }}</th>
-</tr>
-</thead>
-
-<tbody>
-{% for src in source_rows %}
-<tr>
-
-<td>
-<strong>{{ src.name }}</strong>
-</td>
-
-<td>
-{% if src.announce_records %}
-<span class="badge imported">{{ t('active') }}</span>
-{% else %}
-<span class="badge skipped">{{ t('off') }}</span>
-{% endif %}
-</td>
-
-<td>
-{% if src.weekly_recap_enabled %}
-<span class="badge imported">{{ t('active') }}</span>
-{% else %}
-<span class="badge skipped">{{ t('off') }}</span>
-{% endif %}
-</td>
-
-<td>
-{{ src.announce_name or t('none') }}
-</td>
-
-<td>
-{% if src.discord_webhook_url %}
-<span class="badge">{{ t('configured') }}</span>
-{% else %}
-{{ t('none') }}
-{% endif %}
-</td>
-
-<td>
-{{ src.record_window_started_at or t('none') }}
-</td>
-
-</tr>
-{% else %}
-<tr>
-<td colspan="6" class="empty">
-{{ t('no_source_linked_server') }}
-</td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
-
-
-{% if source_rows %}
-<div class="card subtle" style="margin-top:14px;padding:14px">
-<strong>{{ t('legend') }}</strong><br><br>
-
-• {{ t('discord_records_help') }}<br>
-• {{ t('weekly_recap_help') }}<br>
-• {{ t('webhook_settings_help') }}
-</div>
-{% endif %}
-
+  <h2>{{ t('best_times') }}</h2>
+  <p class="muted">DRY/WET = pista asciutta/bagnata | RAIN = pioggia attiva | C = aria | G = grip | WIND = vento</p>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t('position') }}</th>
+        <th>{{ t('driver') }}</th>
+        <th>{{ t('category') }}</th>
+        <th>{{ t('car') }}</th>
+        <th>{{ t('best_lap') }}</th>
+        <th>{{ t('laps') }}</th>
+        <th>{{ t('conditions') }}</th>
+        <th>{{ t('session') }}</th>
+        <th>{{ t('date') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in bests %}
+      <tr class="clickable" data-href="{{ url_for('session_detail', session_id=b.session_id) }}">
+        <td>{{ loop.index }}</td>
+        <td>{{ b.display_name }}</td>
+        <td>{% if b.driver_category %}<span class="badge category">{{ b.driver_category }}</span>{% else %}{{ t('none') }}{% endif %}</td>
+        <td>{{ b.car_name }}</td>
+        <td><strong>{{ b.best_lap_ms|lap_time }}</strong></td>
+        <td>{{ b.laps_total }} ({{ b.laps_valid }})</td>
+        <td>{{ conditions_label(b) or t('none') }}</td>
+        <td>{{ b.session_type }}</td>
+        <td>{{ b.session_datetime }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">{{ t('no_valid_times') }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </section>
 
-<section class="panel"><h2>{{ t('best_times') }}</h2><table><thead><tr><th>{{ t('position') }}</th><th>{{ t('driver') }}</th><th>{{ t('category') }}</th><th>{{ t('car') }}</th><th>{{ t('best_lap') }}</th><th>{{ t('laps') }}</th><th>{{ t('session') }}</th><th>{{ t('date') }}</th></tr></thead><tbody>
-{% for b in bests %}<tr class="clickable" data-href="{{ url_for('session_detail', session_id=b.session_id) }}"><td>{{ loop.index }}</td><td>{{ b.display_name }}</td><td>{% if b.driver_category %}<span class="badge category">{{ b.driver_category }}</span>{% else %}{{ t('none') }}{% endif %}</td><td>{{ b.car_name }}</td><td><strong>{{ b.best_lap_ms|lap_time }}</strong></td><td>{{ b.laps_total }} ({{ b.laps_valid }})</td><td>{{ b.session_type }}</td><td>{{ b.session_datetime }}</td></tr>{% else %}<tr><td colspan="8" class="empty">{{ t('no_valid_times') }}</td></tr>{% endfor %}
-</tbody></table></section>
-<section class="panel"><h2>{{ t('sessions') }}</h2><table><thead><tr><th>{{ t('date') }}</th><th>{{ t('type') }}</th><th>{{ t('drivers') }}</th><th>{{ t('laps') }}</th><th>{{ t('best_lap') }}</th></tr></thead><tbody>
-{% for s in sessions %}<tr class="clickable" data-href="{{ url_for('session_detail', session_id=s.id) }}"><td>{{ s.session_datetime }}</td><td><span class="badge">{{ s.session_type }}</span></td><td>{{ s.drivers_count }}</td><td>{{ s.laps_total }}</td><td>{{ s.best_lap_ms|lap_time }}</td></tr>{% else %}<tr><td colspan="5" class="empty">{{ t('no_sessions') }}</td></tr>{% endfor %}
-</tbody></table></section>
+<section class="panel">
+  <h2>{{ t('sessions') }}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t('date') }}</th>
+        <th>{{ t('type') }}</th>
+        <th>{{ t('conditions') }}</th>
+        <th>{{ t('drivers') }}</th>
+        <th>{{ t('laps') }}</th>
+        <th>{{ t('best_lap') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr class="clickable" data-href="{{ url_for('session_detail', session_id=s.id) }}">
+        <td>{{ s.session_datetime }}</td>
+        <td><span class="badge">{{ s.session_type }}</span></td>
+        <td>{{ conditions_label(s) or t('none') }}</td>
+        <td>{{ s.drivers_count }}</td>
+        <td>{{ s.laps_total }}</td>
+        <td>{{ s.best_lap_ms|lap_time }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">{{ t('no_sessions') }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
 {% endblock %}

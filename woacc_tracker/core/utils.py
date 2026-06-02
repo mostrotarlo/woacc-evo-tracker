@@ -44,7 +44,15 @@ def parse_datetime_from_filename(path: str) -> str:
     m = re.search(r"(20\d{6})[_-](\d{6})", name)
     if m:
         try:
-            return datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S").isoformat(timespec="seconds")
+            filename_dt = datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S")
+            try:
+                file_dt = datetime.fromtimestamp(Path(path).stat().st_mtime)
+                delta = (file_dt - filename_dt).total_seconds()
+                if 0 < delta <= 3 * 60 * 60:
+                    return file_dt.isoformat(timespec="seconds")
+            except Exception:
+                pass
+            return filename_dt.isoformat(timespec="seconds")
         except ValueError:
             pass
     try:

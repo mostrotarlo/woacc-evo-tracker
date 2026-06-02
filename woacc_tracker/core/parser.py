@@ -7,8 +7,22 @@ from typing import Any, Dict, List, Tuple
 from .utils import key_to_str, make_server_key, parse_datetime_from_filename, display_driver_name
 
 # Nei JSON EVO usati per lo sviluppo, flags==2 indica giro valido.
+# flags==129 indica rientro/teletrasporto ai box: il giro successivo e' outlap.
 # Gli altri flags vengono conservati per visualizzazione/debug nella lista giri.
 VALID_LAP_FLAGS = {2}
+PIT_RETURN_FLAGS = {129}
+
+
+def _invalid_lap_reason(flags: int, outlap_after_pit: bool) -> str:
+    if outlap_after_pit:
+        return "outlap_after_pit"
+    if flags in PIT_RETURN_FLAGS:
+        return "pit_return"
+    if flags == 1:
+        return "invalid_or_outlap"
+    if flags not in VALID_LAP_FLAGS:
+        return "unknown_flags"
+    return ""
 
 
 def file_sha256(path: Path) -> str:
@@ -23,14 +37,18 @@ def _avg(values: List[int]) -> int | None:
     return int(round(sum(values) / len(values))) if values else None
 
 
-def _normalize_driver_category(value: Any) -> str:
+def _normalize_driver_category(value: Any, key: str = "") -> str:
     if value is None:
         return ""
     if isinstance(value, bool):
         return ""
     if isinstance(value, (int, float)):
-        # Mappatura prudente: se il gioco usa enum diversi, il valore resta comunque leggibile.
-        mapping = {0: "AM", 1: "SILVER", 2: "PRO", 3: "PRO-AM", 4: "PLATINUM"}
+        if "cup" in key.lower():
+            # ACC cupCategory: 0 Overall/PRO, 1 PRO-AM, 2 AM, 3 SILVER.
+            mapping = {0: "PRO", 1: "PRO-AM", 2: "AM", 3: "SILVER", 4: "NATIONAL"}
+        else:
+            # Mappatura prudente: se il gioco usa enum diversi, il valore resta comunque leggibile.
+            mapping = {0: "AM", 1: "SILVER", 2: "PRO", 3: "PRO-AM", 4: "PLATINUM"}
         return mapping.get(int(value), str(int(value))).upper()
     text = str(value).strip()
     if not text:
@@ -58,7 +76,7 @@ def _find_driver_category(*objects: Any) -> str:
             for key, value in obj.items():
                 k = str(key).lower()
                 if any(w in k for w in wanted):
-                    found = _normalize_driver_category(value)
+                    found = _normalize_driver_category(value, str(key))
                     if found:
                         return found
             for value in obj.values():
@@ -117,9 +135,12 @@ def parse_evo_results(path: Path) -> Dict[str, Any]:
         valid_s2: List[int] = []
         valid_s3: List[int] = []
 
+        next_lap_is_outlap = False
+
         for idx, lap in enumerate(laps, start=1):
             flags = int(lap.get("flags") or 0)
-            is_valid = flags in VALID_LAP_FLAGS
+            is_valid = flags in VALID_LAP_FLAGS and not next_lap_is_outlap
+            invalid_reason = "" if is_valid else _invalid_lap_reason(flags, next_lap_is_outlap)
             lap_time = int(lap.get("time") or 0)
             split = lap.get("split") or []
             s1 = int(split[0]) if len(split) > 0 and split[0] is not None else None
@@ -138,11 +159,14 @@ def parse_evo_results(path: Path) -> Dict[str, Any]:
                 "lap_number": idx,
                 "lap_time_ms": lap_time,
                 "is_valid": is_valid,
+                "invalid_reason": invalid_reason,
                 "flags": flags,
                 "s1_ms": s1,
                 "s2_ms": s2,
                 "s3_ms": s3,
             })
+
+            next_lap_is_outlap = flags in PIT_RETURN_FLAGS
 
         best_lap = min(valid_times) if valid_times else None
         potential_lap = (min(valid_s1) + min(valid_s2) + min(valid_s3)) if valid_s1 and valid_s2 and valid_s3 else None

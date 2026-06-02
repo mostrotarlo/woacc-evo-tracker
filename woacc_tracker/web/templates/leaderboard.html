@@ -21,9 +21,15 @@
     <option value="">{{ t('all') }}</option>
     {% for tp in types %}<option value="{{ tp.session_type }}" {% if stype==tp.session_type %}selected{% endif %}>{{ tp.session_type }}</option>{% endfor %}
   </select>
+  <select name="condition">
+    <option value="">{{ t('all_conditions', 'Tutte le condizioni') }}</option>
+    <option value="dry" {% if condition=='dry' %}selected{% endif %}>{{ t('condition_dry', 'Asciutto') }}</option>
+    <option value="wet" {% if condition=='wet' %}selected{% endif %}>{{ t('condition_wet', 'Bagnato') }}</option>
+  </select>
   <button>{{ t('filter') }}</button>
 </form>
 <section class="panel leaderboard-panel">
+  <p class="muted">DRY/WET = pista asciutta/bagnata | RAIN = pioggia attiva | C = aria | G = grip | WIND = vento</p>
   <table class="leaderboard-table">
     <thead>
       <tr>
@@ -34,6 +40,7 @@
         <th class="col-best">{{ t('best_lap') }}</th>
         <th class="col-valid">{{ t('valid_laps') }}</th>
         <th class="col-count">{{ t('sessions_count') }}</th>
+        <th>{{ t('conditions') }}</th>
         <th>{{ t('server') }}</th>
         <th>{{ t('track') }}</th>
         <th class="col-date">{{ t('date') }}</th>
@@ -49,12 +56,13 @@
         <td class="col-best"><strong>{{ r.best_lap_ms|lap_time }}</strong></td>
         <td class="col-valid">{{ r.laps_valid }}</td>
         <td class="col-count">{{ r.sessions_count }}</td>
+        <td>{{ conditions_label(r) or t('none') }}</td>
         <td><div class="clip" title="{{ r.server_name }}">{{ r.server_name }}</div></td>
         <td><div class="clip track" title="{{ r.track_name }}">{{ r.track_name }}</div></td>
         <td class="col-date">{{ r.session_datetime }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="10" class="empty">{{ t('no_results') }}</td></tr>
+      <tr><td colspan="11" class="empty">{{ t('no_results') }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

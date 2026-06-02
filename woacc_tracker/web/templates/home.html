@@ -22,8 +22,9 @@
 </section>
 <section class="panel">
   <div class="section-head"><h2>{{ t('latest_sessions') }}</h2><a href="{{ url_for('sessions_page') }}">{{ t('view_all') }}</a></div>
-  <table><thead><tr><th>{{ t('date') }}</th><th>{{ t('server') }}</th><th>{{ t('track') }}</th><th>{{ t('type') }}</th><th>{{ t('drivers') }}</th><th>{{ t('best_lap') }}</th></tr></thead><tbody>
-  {% for s in sessions %}<tr class="clickable" data-href="{{ url_for('session_detail', session_id=s.id) }}"><td>{{ s.session_datetime }}</td><td>{{ s.server_name }}</td><td>{{ s.track_name }}</td><td><span class="badge">{{ s.session_type }}</span></td><td>{{ s.drivers_count }}</td><td>{{ s.best_lap_ms|lap_time }}</td></tr>{% else %}<tr><td colspan="6" class="empty">{{ t('no_sessions') }}</td></tr>{% endfor %}
+  <p class="muted">DRY/WET = pista asciutta/bagnata | RAIN = pioggia attiva | C = aria | G = grip | WIND = vento</p>
+  <table><thead><tr><th>{{ t('date') }}</th><th>{{ t('server') }}</th><th>{{ t('track') }}</th><th>{{ t('type') }}</th><th>{{ t('conditions') }}</th><th>{{ t('drivers') }}</th><th>{{ t('best_lap') }}</th></tr></thead><tbody>
+  {% for s in sessions %}<tr class="clickable" data-href="{{ url_for('session_detail', session_id=s.id) }}"><td>{{ s.session_datetime }}</td><td>{{ s.server_name }}</td><td>{{ s.track_name }}</td><td><span class="badge">{{ s.session_type }}</span></td><td>{{ conditions_label(s) or t('none') }}</td><td>{{ s.drivers_count }}</td><td>{{ s.best_lap_ms|lap_time }}</td></tr>{% else %}<tr><td colspan="7" class="empty">{{ t('no_sessions') }}</td></tr>{% endfor %}
   </tbody></table>
 </section>
 {% endblock %}
