@@ -1,4 +1,4 @@
-WOACC EVO Tracker – Quick Installation & Remote Access Guide (v13.2 Social)
+﻿WOACC EVO Tracker - Quick Installation & Remote Access Guide (v14.0.0)
 
 1. Start the Tracker
 
@@ -56,7 +56,7 @@ How to create a Discord Webhook:
 2. Open the settings of your desired channel
 3. Open:
 
-Integrations → Webhooks
+Integrations â†’ Webhooks
 
 4. Create a new Webhook
 5. Copy the Webhook URL
@@ -82,7 +82,7 @@ Available functions:
 
 Example message:
 
-🏆 New Record
+ðŸ† New Record
 
 Event: FMP SERVER 1
 
@@ -103,7 +103,7 @@ Displayed information:
 
 Example message:
 
-🏆 Weekly Record Recap
+ðŸ† Weekly Record Recap
 
 Imola
 Fabio
@@ -130,7 +130,7 @@ Simple
 
 Sends:
 
-📢 New sessions available
+ðŸ“¢ New sessions available
 
 https://woacc.zapto.org/tracker
 
@@ -139,12 +139,12 @@ Detailed
 
 Practice:
 
-📢 New Practice session available
+ðŸ“¢ New Practice session available
 
 
 Qualify:
 
-🏁 Qualifying completed
+ðŸ Qualifying completed
 
 P1 Fabio
 1:43.221
@@ -158,7 +158,7 @@ P3 Luca
 
 Race:
 
-🏁 Race completed
+ðŸ Race completed
 
 P1 Fabio
 
@@ -199,7 +199,7 @@ Available functions:
 - Latest earned licenses
 - License ranking
 - Driver search
-- Click driver → open related session
+- Click driver â†’ open related session
 
 Rules:
 
@@ -209,13 +209,13 @@ Example:
 
 Fabio
 
-1:47.500 → AM
+1:47.500 â†’ AM
 
-1:47.200 → no notification
+1:47.200 â†’ no notification
 
-1:44.900 → SILVER
+1:44.900 â†’ SILVER
 
-1:43.100 → PRO
+1:43.100 â†’ PRO
 
 SteamID is used internally but is never displayed in the web interface.
 

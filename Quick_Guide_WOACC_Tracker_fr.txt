@@ -1,34 +1,34 @@
-WOACC EVO Tracker – Guide Rapide d'Installation et d'Accès à Distance (v13.2 Social)
+﻿WOACC EVO Tracker - Guide Rapide d'Installation et d'Acces a Distance (v14.0.0)
 
-1. Démarrer le Tracker
+1. DÃ©marrer le Tracker
 
-Lancez WOACC Tracker à l’aide du fichier exécutable.
+Lancez WOACC Tracker Ã  lâ€™aide du fichier exÃ©cutable.
 
-Une fois démarré, la fenêtre principale apparaîtra.
+Une fois dÃ©marrÃ©, la fenÃªtre principale apparaÃ®tra.
 
-Paramètres recommandés :
+ParamÃ¨tres recommandÃ©s :
 
 - Port de l'application Web : 5055
-- Activer : Accès distant / LAN
-- Facultatif : définir un mot de passe
+- Activer : AccÃ¨s distant / LAN
+- Facultatif : dÃ©finir un mot de passe
 
 Ensuite appuyez sur :
 
-Enregistrer les paramètres
-Démarrer le Tracker
+Enregistrer les paramÃ¨tres
+DÃ©marrer le Tracker
 
 
-2. Configurer les Dossiers Surveillés
+2. Configurer les Dossiers SurveillÃ©s
 
-Le tracker doit connaître l’emplacement où le serveur dédié EVO enregistre les fichiers JSON des sessions.
+Le tracker doit connaÃ®tre lâ€™emplacement oÃ¹ le serveur dÃ©diÃ© EVO enregistre les fichiers JSON des sessions.
 
 Appuyez sur :
 
 Ajouter un dossier
 
-et sélectionnez :
+et sÃ©lectionnez :
 
-Dossier results du serveur dédié EVO
+Dossier results du serveur dÃ©diÃ© EVO
 
 Fonctions prises en charge :
 
@@ -46,56 +46,56 @@ WOACC Tracker peut envoyer automatiquement des notifications Discord via Webhook
 Fonctions disponibles :
 
 - Records
-- Récapitulatif hebdomadaire
+- RÃ©capitulatif hebdomadaire
 - Nouvelles sessions
-- Système de licences
+- SystÃ¨me de licences
 
-Comment créer un Webhook Discord :
+Comment crÃ©er un Webhook Discord :
 
 1. Ouvrir Discord
-2. Ouvrir les paramètres du canal souhaité
+2. Ouvrir les paramÃ¨tres du canal souhaitÃ©
 3. Ouvrir :
 
-Intégrations → Webhooks
+IntÃ©grations â†’ Webhooks
 
-4. Créer un nouveau Webhook
-5. Copier l’URL du Webhook
+4. CrÃ©er un nouveau Webhook
+5. Copier lâ€™URL du Webhook
 
 Dans le tracker :
 
-- sélectionner un dossier surveillé
+- sÃ©lectionner un dossier surveillÃ©
 - appuyer sur Setup Discord
-- configurer les options souhaitées
+- configurer les options souhaitÃ©es
 - enregistrer
 
 
 RECORDS
 
-Envoie automatiquement un message Discord lorsqu’un nouveau record est établi.
+Envoie automatiquement un message Discord lorsquâ€™un nouveau record est Ã©tabli.
 
 Fonctions disponibles :
 
-- Activer/Désactiver les records
-- Webhook dédié
-- Nom personnalisé de l’événement/serveur
-- Réinitialisation de l’historique
+- Activer/DÃ©sactiver les records
+- Webhook dÃ©diÃ©
+- Nom personnalisÃ© de lâ€™Ã©vÃ©nement/serveur
+- RÃ©initialisation de lâ€™historique
 
 Exemple :
 
-🏆 Nouveau Record
+ðŸ† Nouveau Record
 
-Événement : FMP SERVER 1
+Ã‰vÃ©nement : FMP SERVER 1
 
 Pilote : Fabio
 Circuit : Imola
 Temps : 1:43.221
 
 
-RÉCAPITULATIF HEBDOMADAIRE
+RÃ‰CAPITULATIF HEBDOMADAIRE
 
-Envoie automatiquement un résumé hebdomadaire des records.
+Envoie automatiquement un rÃ©sumÃ© hebdomadaire des records.
 
-Informations affichées :
+Informations affichÃ©es :
 
 - Pilote
 - Circuit
@@ -103,7 +103,7 @@ Informations affichées :
 
 Exemple :
 
-🏆 Récapitulatif Hebdomadaire
+ðŸ† RÃ©capitulatif Hebdomadaire
 
 Imola
 Fabio
@@ -120,9 +120,9 @@ Luca
 
 SESSIONS
 
-Permet d’envoyer automatiquement des notifications lorsqu’une nouvelle session est disponible.
+Permet dâ€™envoyer automatiquement des notifications lorsquâ€™une nouvelle session est disponible.
 
-Un Webhook dédié peut être utilisé.
+Un Webhook dÃ©diÃ© peut Ãªtre utilisÃ©.
 
 Modes disponibles :
 
@@ -130,21 +130,21 @@ Simple
 
 Envoie :
 
-📢 Nouvelles sessions disponibles
+ðŸ“¢ Nouvelles sessions disponibles
 
 https://woacc.zapto.org/tracker
 
 
-Détaillé
+DÃ©taillÃ©
 
 Practice :
 
-📢 Nouvelle session Practice disponible
+ðŸ“¢ Nouvelle session Practice disponible
 
 
 Qualify :
 
-🏁 Qualification terminée
+ðŸ Qualification terminÃ©e
 
 P1 Fabio
 1:43.221
@@ -158,7 +158,7 @@ P3 Luca
 
 Race :
 
-🏁 Course terminée
+ðŸ Course terminÃ©e
 
 P1 Fabio
 
@@ -171,8 +171,8 @@ LICENCES
 
 Permet de configurer :
 
-- de 1 à 3 seuils
-- noms personnalisés
+- de 1 Ã  3 seuils
+- noms personnalisÃ©s
 
 Exemple :
 
@@ -181,7 +181,7 @@ SILVER    1:45.000
 PRO       1:43.000
 
 
-4. Thème Web (Optionnel)
+4. ThÃ¨me Web (Optionnel)
 
 Vous pouvez personnaliser :
 
@@ -190,37 +190,37 @@ Vous pouvez personnaliser :
 - Apparence de l'application Web
 
 
-5. Système de Licences
+5. SystÃ¨me de Licences
 
-WOACC Tracker inclut un système automatique de licences basé sur les temps réalisés.
+WOACC Tracker inclut un systÃ¨me automatique de licences basÃ© sur les temps rÃ©alisÃ©s.
 
 Fonctions disponibles :
 
-- Dernières licences obtenues
+- DerniÃ¨res licences obtenues
 - Classement des licences
 - Recherche de pilote
-- Clic sur un pilote → ouverture de la session associée
+- Clic sur un pilote â†’ ouverture de la session associÃ©e
 
-Règles :
+RÃ¨gles :
 
-Une notification n’est envoyée qu’une seule fois par niveau.
+Une notification nâ€™est envoyÃ©e quâ€™une seule fois par niveau.
 
 Exemple :
 
 Fabio
 
-1:47.500 → AM
+1:47.500 â†’ AM
 
-1:47.200 → aucune notification
+1:47.200 â†’ aucune notification
 
-1:44.900 → SILVER
+1:44.900 â†’ SILVER
 
-1:43.100 → PRO
+1:43.100 â†’ PRO
 
-Le SteamID est utilisé en interne mais n’est jamais affiché dans l’interface Web.
+Le SteamID est utilisÃ© en interne mais nâ€™est jamais affichÃ© dans lâ€™interface Web.
 
 
-6. Accès Local
+6. AccÃ¨s Local
 
 Local :
 
@@ -231,9 +231,9 @@ LAN :
 http://192.168.x.x:5055
 
 
-7. Accès Internet (Sans Caddy)
+7. AccÃ¨s Internet (Sans Caddy)
 
-Pour permettre l’accès à distance :
+Pour permettre lâ€™accÃ¨s Ã  distance :
 
 1. Ouvrir le port 5055 dans le pare-feu Windows
 2. Ouvrir le port 5055 dans le routeur avec Port Forwarding
@@ -246,20 +246,20 @@ Services pris en charge :
 - Zapto
 
 
-8. Vérifier le Fonctionnement
+8. VÃ©rifier le Fonctionnement
 
-Après avoir ouvert le port :
+AprÃ¨s avoir ouvert le port :
 
-- démarrer le tracker
-- générer une session EVO
-- vérifier l’importation JSON
+- dÃ©marrer le tracker
+- gÃ©nÃ©rer une session EVO
+- vÃ©rifier lâ€™importation JSON
 - ouvrir le tracker depuis un autre appareil
 
 
-WOACC EVO Tracker est un projet gratuit créé par la communauté.
+WOACC EVO Tracker est un projet gratuit crÃ©Ã© par la communautÃ©.
 
 GitHub :
 https://github.com/mostrotarlo/woacc-evo-tracker
 
-Démo Live :
+DÃ©mo Live :
 https://woacc.zapto.org/tracker

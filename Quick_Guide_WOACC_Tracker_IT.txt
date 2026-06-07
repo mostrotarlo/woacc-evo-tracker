@@ -1,10 +1,10 @@
-WOACC EVO Tracker – Guida Rapida Installazione e Accesso Remoto (v13.2 Social)
+﻿WOACC EVO Tracker - Guida Rapida Installazione e Accesso Remoto (v14.0.0)
 
 1. Avviare il Tracker
 
 Avviare WOACC Tracker tramite l'eseguibile.
 
-Una volta aperta l'applicazione comparirà la schermata principale.
+Una volta aperta l'applicazione comparirÃ  la schermata principale.
 
 Impostazioni consigliate:
 
@@ -32,16 +32,16 @@ cartella results del Dedicated Server EVO
 
 Funzioni supportate:
 
-Practice: Sì
-Qualify: Sì
-Race: Sì
-Leaderboard: Sì
-Statistiche piloti: Sì
+Practice: SÃ¬
+Qualify: SÃ¬
+Race: SÃ¬
+Leaderboard: SÃ¬
+Statistiche piloti: SÃ¬
 
 
 3. Setup Discord (Opzionale)
 
-WOACC Tracker può inviare notifiche Discord automatiche tramite Webhook.
+WOACC Tracker puÃ² inviare notifiche Discord automatiche tramite Webhook.
 
 Funzioni disponibili:
 
@@ -56,7 +56,7 @@ Come creare un Webhook Discord:
 2. Entrare nelle impostazioni del canale desiderato
 3. Aprire:
 
-Integrazioni → Webhook
+Integrazioni â†’ Webhook
 
 4. Creare un nuovo Webhook
 5. Copiare l'URL del Webhook
@@ -82,7 +82,7 @@ Funzioni:
 
 Messaggio esempio:
 
-🏆 Nuovo Record
+ðŸ† Nuovo Record
 
 Evento: FMP SERVER 1
 
@@ -103,7 +103,7 @@ Informazioni mostrate:
 
 Messaggio esempio:
 
-🏆 Weekly Record Recap
+ðŸ† Weekly Record Recap
 
 Imola
 Fabio
@@ -122,15 +122,15 @@ SESSIONS
 
 Permette di notificare automaticamente nuove sessioni disponibili.
 
-È possibile utilizzare un Webhook dedicato.
+Ãˆ possibile utilizzare un Webhook dedicato.
 
-Modalità disponibili:
+ModalitÃ  disponibili:
 
 Simple
 
 Invia:
 
-📢 Nuove sessioni disponibili
+ðŸ“¢ Nuove sessioni disponibili
 
 https://woacc.zapto.org/tracker
 
@@ -139,12 +139,12 @@ Detailed
 
 Practice:
 
-📢 Nuova sessione Practice disponibile
+ðŸ“¢ Nuova sessione Practice disponibile
 
 
 Qualifica:
 
-🏁 Qualifica conclusa
+ðŸ Qualifica conclusa
 
 P1 Fabio
 1:43.221
@@ -158,7 +158,7 @@ P3 Luca
 
 Race:
 
-🏁 Gara conclusa
+ðŸ Gara conclusa
 
 P1 Fabio
 
@@ -183,7 +183,7 @@ PRO       1:43.000
 
 4. Tema Web (Opzionale)
 
-È possibile personalizzare:
+Ãˆ possibile personalizzare:
 
 - Colori
 - Font
@@ -199,7 +199,7 @@ Funzioni disponibili:
 - Ultime licenze ottenute
 - Classifica licenze
 - Ricerca pilota
-- Click sul pilota → apertura sessione
+- Click sul pilota â†’ apertura sessione
 
 Regole:
 
@@ -209,13 +209,13 @@ Esempio:
 
 Fabio
 
-1:47.500 → AM
+1:47.500 â†’ AM
 
-1:47.200 → nessuna notifica
+1:47.200 â†’ nessuna notifica
 
-1:44.900 → SILVER
+1:44.900 â†’ SILVER
 
-1:43.100 → PRO
+1:43.100 â†’ PRO
 
 Lo SteamID viene utilizzato internamente ma non viene mostrato nell'interfaccia.
 
@@ -254,7 +254,7 @@ Dopo aver aperto la porta:
 - aprire il tracker da un altro dispositivo
 
 
-WOACC EVO Tracker è un progetto gratuito community-made.
+WOACC EVO Tracker Ã¨ un progetto gratuito community-made.
 
 GitHub:
 https://github.com/mostrotarlo/woacc-evo-tracker

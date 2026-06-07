@@ -12,6 +12,8 @@ It imports EVO result files automatically, builds web leaderboards and session p
 
 - Automatic import of Assetto Corsa EVO result JSON files
 - Optional import of server conditions from `Assetto Corsa EVO Server.txt`
+- Optional live leaderboard generated from the dedicated server log
+- Online server cards with live session type, track, conditions and player count
 - Weather, air temperature, rain, wet track, wind, grip, rubber and marbles stored per session
 - Compact DRY/WET/RAIN condition labels in web tables and Discord messages
 - Dry/wet filters for sessions, records and leaderboards
@@ -27,6 +29,90 @@ It imports EVO result files automatically, builds web leaderboards and session p
 - Reverse proxy / Caddy support with configurable base path
 - Custom web theme: colors and fonts
 - Multi-language interface
+
+---
+
+## New in v14.0.0 Live Server Monitoring
+
+### Live leaderboard from server logs
+
+Each monitored source can enable a live leaderboard based on:
+
+```text
+Assetto Corsa EVO Server.txt
+```
+
+For Practice and Qualifying sessions, WOACC Tracker builds a provisional live leaderboard ordered by best lap and shows:
+
+- driver
+- car
+- best lap
+- gap
+- lap count
+- last lap
+- sectors S1, S2 and S3
+- online / offline / unconfirmed driver state
+
+The live leaderboard refreshes automatically every 5 seconds.
+
+Race live ordering is intentionally left pending until enough reliable race log data is available.
+
+### Per-server live toggle
+
+Live leaderboard reading can be enabled or disabled for each monitored server from the desktop app.
+
+This avoids unnecessary log parsing on communities with many servers.
+
+### Online server overview
+
+The Servers page now includes online server cards with:
+
+- server name
+- track
+- session type
+- conditions
+- online player count
+- live leaderboard link
+
+The top navigation also shows active servers and total online players.
+
+### Log reading optimization
+
+WOACC Tracker now keeps live log reading lighter:
+
+- server/player status uses lightweight reads;
+- detailed leaderboard parsing runs only when the live page/API is requested;
+- live leaderboard data uses short cache;
+- automatic refresh is reduced to 5 seconds.
+
+### Current-session handling
+
+The live leaderboard resets when the log indicates a new session, so old laps and offline drivers from previous sessions are not mixed with the current session.
+
+Driver states are shown as online, offline or unconfirmed depending on what the log can prove.
+
+### Log sync/reset tool
+
+The desktop app includes a server log sync/reset tool.
+
+Use it while the dedicated server is stopped. It renames the existing log with a progressive backup name and creates a new empty:
+
+```text
+Assetto Corsa EVO Server.txt
+```
+
+This is useful when old logs have become very large.
+
+### Complete setup guides
+
+Two complete installation and configuration guides are included:
+
+```text
+GUIDA_INSTALLAZIONE_CONFIGURAZIONE.md
+INSTALLATION_AND_CONFIGURATION.md
+```
+
+They explain where to find each server `result` folder and the matching `Assetto Corsa EVO Server.txt` log file.
 
 ---
 
@@ -449,19 +535,19 @@ The compiled executable should be published in **GitHub Releases**, not committe
 Suggested tag:
 
 ```text
-v13.3.0
+v14.0.0
 ```
 
 Suggested release title:
 
 ```text
-WOACC EVO Tracker v13.3.0 Conditions Update
+WOACC EVO Tracker v14.0.0 Live Server Monitoring
 ```
 
 Short release summary:
 
 ```text
-This release adds server condition tracking from Assetto Corsa EVO Server.txt, DRY/WET/RAIN labels, dry/wet filters, global community weekly recap, Discord/API condition metadata, invalid lap reasons, Spanish translations, and local-time matching for result files.
+This release adds optional live leaderboard monitoring from Assetto Corsa EVO Server.txt, online server cards, live player counts, sector display, driver online/offline states, log sync/reset tools, performance-oriented log caching, and complete setup guides in Italian and English.
 ```
 
 ---
