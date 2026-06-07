@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
-from wsgiref.simple_server import make_server, WSGIServer
+from wsgiref.simple_server import make_server, WSGIRequestHandler, WSGIServer
 from socketserver import ThreadingMixIn
 
 from .core.config import load_config, save_config, DEFAULT_WOACC_API_KEY
@@ -14,11 +14,20 @@ from .core.database import Database
 from .core.importer import Importer
 from .core.monitor import FolderMonitor
 from .core.security import hash_password
+from .core.server_log import is_live_leaderboard_enabled
 from .web.app import create_app
 
 
 class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
     daemon_threads = True
+
+
+class QuietLivePollingRequestHandler(WSGIRequestHandler):
+    def log_message(self, format, *args):
+        path = getattr(self, "path", "") or ""
+        if "/api/live/leaderboard/" in path or "/api/live/status" in path:
+            return
+        super().log_message(format, *args)
 
 
 class TrackerDesktop:
@@ -172,7 +181,9 @@ class TrackerDesktop:
         ttk.Button(top,text=self._t("desktop_edit_name", "✏️ Edit name"),command=self.edit_source_name).pack(side="left", padx=4)
         ttk.Button(top,text=self._t("desktop_remove", "❌ Remove"),command=self.remove_source).pack(side="left", padx=4)
         ttk.Button(top,text=self._t("desktop_toggle", "Enable/Disable"),command=self.toggle_source).pack(side="left", padx=4)
+        ttk.Button(top,text=self._t("desktop_toggle_live_leaderboard", "Live leaderboard ON/OFF"),command=self.toggle_source_live_leaderboard).pack(side="left", padx=4)
         ttk.Button(top,text=self._t("desktop_select_server_log", "Select Assetto Corsa EVO Server.txt"),command=self.set_source_server_log).pack(side="left", padx=4)
+        ttk.Button(top,text=self._t("desktop_sync_server_log", "Sync server log"),command=self.sync_source_server_log).pack(side="left", padx=4)
 
         ttk.Button(
             top,
@@ -204,6 +215,7 @@ class TrackerDesktop:
                 "record",
                 "session",
                 "license",
+                "live",
                 "name",
                 "path",
                 "server_log",
@@ -219,6 +231,7 @@ class TrackerDesktop:
             ("record", self._t("records", "Records"), 80),
             ("session", self._t("sessions", "Sessions"), 80),
             ("license", self._t("licenses", "Licenses"), 80),
+            ("live", self._t("live_leaderboard", "Live leaderboard"), 120),
             ("name", self._t("desktop_name", "Name"), 180),
             ("path", self._t("desktop_path", "Path"), 360),
             ("server_log", self._t("desktop_server_log", "Server log"), 120),
@@ -328,6 +341,7 @@ class TrackerDesktop:
                     self._t("yes", "Yes") if src.get("announce_records") else self._t("no", "No"),
                     self._t("yes", "Yes") if src.get("session_notify_enabled") else self._t("no", "No"),
                     self._t("yes", "Yes") if src.get("license_enabled") else self._t("no", "No"),
+                    self._t("yes", "Yes") if is_live_leaderboard_enabled(src) else self._t("no", "No"),
                     src.get("name",""),
                     src.get("path",""),
                     self._t("desktop_set", "Set") if src.get("server_log_path") else self._t("no", "No"),
@@ -375,12 +389,15 @@ class TrackerDesktop:
             title=self._t("desktop_select_server_log_file", "Select Assetto Corsa EVO Server.txt"),
             filetypes=[("Assetto Corsa EVO Server.txt", "Assetto Corsa EVO Server.txt"), ("Text files", "*.txt"), ("All files", "*.*")]
         )
+        if server_log_path:
+            self._offer_server_log_sync(server_log_path)
 
         self.cfg.setdefault("sources", []).append({
             "name": name,
             "path": path,
             "enabled": True,
             "server_log_path": server_log_path or "",
+            "live_leaderboard_enabled": False,
 
             "announce_records": False,
             "announce_name": name,
@@ -422,6 +439,77 @@ class TrackerDesktop:
         self._load_sources_to_tree()
         self._log(self._t("desktop_server_log_saved", "Server log saved"))
 
+    def _server_log_backup_path(self, path: Path) -> Path:
+        for index in range(1, 10000):
+            backup = path.with_name(f"{path.stem}_{index:03d}{path.suffix}")
+            if not backup.exists():
+                return backup
+        raise RuntimeError(self._t("desktop_server_log_backup_limit", "Too many server log backup files."))
+
+    def _sync_server_log_path(self, log_path: str) -> bool:
+        path = Path(log_path)
+        if not path.exists() or not path.is_file():
+            messagebox.showwarning(
+                self._t("desktop_server_log_missing", "Server log missing"),
+                self._t("desktop_server_log_missing_detail", "The selected server log file does not exist.")
+            )
+            return False
+        backup = self._server_log_backup_path(path)
+        try:
+            path.rename(backup)
+            try:
+                path.write_text("", encoding="utf-8")
+            except Exception:
+                if backup.exists() and not path.exists():
+                    backup.rename(path)
+                raise
+        except Exception as exc:
+            messagebox.showerror(
+                self._t("desktop_server_log_sync_error", "Server log sync error"),
+                self._t(
+                    "desktop_server_log_sync_error_detail",
+                    "Unable to sync the server log. Stop the dedicated server and try again.\n{exc}"
+                ).format(exc=exc)
+            )
+            return False
+        self._log(
+            self._t(
+                "desktop_server_log_synced",
+                "Server log synced. Backup created: {file}"
+            ).format(file=backup.name)
+        )
+        return True
+
+    def _offer_server_log_sync(self, log_path: str) -> bool:
+        if not Path(log_path).exists():
+            return False
+        if not messagebox.askyesno(
+            self._t("desktop_server_log_sync_title", "Sync server log"),
+            self._t(
+                "desktop_server_log_sync_prompt",
+                "The dedicated server must be stopped.\n\nThe current Assetto Corsa EVO Server.txt will be renamed with a progressive number and a new empty file will be created.\n\nContinue?"
+            )
+        ):
+            return False
+        return self._sync_server_log_path(log_path)
+
+    def sync_source_server_log(self):
+        idx = self._selected_source_index()
+        if idx is None:
+            messagebox.showwarning(
+                self._t("desktop_no_source_selected", "No server selected"),
+                self._t("desktop_select_source_first", "Select a server/folder first.")
+            )
+            return
+        log_path = self.cfg["sources"][idx].get("server_log_path") or ""
+        if not log_path:
+            messagebox.showwarning(
+                self._t("desktop_server_log_missing", "Server log missing"),
+                self._t("desktop_select_server_log_before_sync", "Select Assetto Corsa EVO Server.txt before syncing the server log.")
+            )
+            return
+        self._offer_server_log_sync(log_path)
+
     def _selected_source_index(self):
         sel = self.sources_tree.selection()
         return int(sel[0]) if sel else None
@@ -451,6 +539,27 @@ class TrackerDesktop:
         self.cfg["sources"][idx]["enabled"] = not self.cfg["sources"][idx].get("enabled", True)
         save_config(self.cfg)
         self._load_sources_to_tree()
+
+    def toggle_source_live_leaderboard(self):
+        idx = self._selected_source_index()
+        if idx is None:
+            messagebox.showwarning(
+                self._t("desktop_no_source_selected", "No server selected"),
+                self._t("desktop_select_source_first", "Select a server/folder first.")
+            )
+            return
+        src = self.cfg["sources"][idx]
+        if not src.get("server_log_path"):
+            messagebox.showwarning(
+                self._t("desktop_server_log_missing", "Server log missing"),
+                self._t("desktop_select_server_log_before_live", "Select Assetto Corsa EVO Server.txt before enabling live leaderboard.")
+            )
+            return
+        src["live_leaderboard_enabled"] = not is_live_leaderboard_enabled(src)
+        save_config(self.cfg)
+        self._load_sources_to_tree()
+        state = self._t("desktop_enabled", "Enabled") if is_live_leaderboard_enabled(src) else self._t("desktop_disabled", "Disabled")
+        self._log(self._t("desktop_live_leaderboard_status", "Live leaderboard: {state}").format(state=state))
 
     def configure_record_source(self):
         # Compatibilità con il vecchio pulsante/funzione.
@@ -730,7 +839,7 @@ class TrackerDesktop:
             app = create_app(self.db, self.cfg)
             host = "0.0.0.0" if self.cfg.get("remote_access") else "127.0.0.1"
             port = int(self.cfg.get("port", 5055))
-            self.httpd = make_server(host, port, app, server_class=ThreadedWSGIServer)
+            self.httpd = make_server(host, port, app, server_class=ThreadedWSGIServer, handler_class=QuietLivePollingRequestHandler)
             self.server_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
             self.server_thread.start()
             self.monitor = FolderMonitor(self.importer, lambda: self.cfg.get("sources", []), int(self.cfg.get("scan_interval_sec", 10)), self._log)

@@ -2,6 +2,26 @@
 {% block content %}
 <div class="page-head"><h1>{{ t('available_servers') }}</h1><p>{{ servers|length }} {{ t('servers')|lower }}</p></div>
 <form class="filters" method="get"><input name="q" value="{{ q }}" placeholder="{{ t('search_server_or_track') }}"><select name="sort"><option value="last" {% if sort=='last' %}selected{% endif %}>{{ t('sort_last') }}</option><option value="name" {% if sort=='name' %}selected{% endif %}>{{ t('sort_name') }}</option><option value="track" {% if sort=='track' %}selected{% endif %}>{{ t('sort_track') }}</option><option value="sessions" {% if sort=='sessions' %}selected{% endif %}>{{ t('sort_sessions') }}</option></select><select name="dir"><option value="desc" {% if direction=='desc' %}selected{% endif %}>{{ t('decreasing') }}</option><option value="asc" {% if direction=='asc' %}selected{% endif %}>{{ t('increasing') }}</option></select><button>{{ t('search') }}</button></form>
+{% if live_status.online %}
+<section class="panel">
+  <div class="section-head"><h2>{{ t('online_servers', 'Server online') }}</h2><span class="muted">{{ t('players_online', 'Player online') }}: {{ live_status.players_online }}</span></div>
+  <div class="live-server-grid">
+    {% for s in live_status.online %}
+    <div class="live-server-card">
+      <div class="live-card-head">
+        <h3>{{ s.server_name or s.source_name }}</h3>
+        <span class="badge live">{{ t('online', 'Online') }}</span>
+      </div>
+      <div class="live-card-row"><span>{{ t('session_type') }}</span><strong>{{ s.session_type or t('none') }}</strong></div>
+      <div class="live-card-row"><span>{{ t('track') }}</span><strong>{{ s.track_name or t('unknown_track') }}</strong></div>
+      <div class="live-card-row"><span>{{ t('conditions') }}</span><strong>{{ conditions_label(s) or t('none') }}</strong></div>
+      <div class="live-card-row"><span>{{ t('players_online', 'Player online') }}</span><strong>{{ s.players_online or 0 }}</strong></div>
+      <a class="live-link" href="{{ url_for('live_leaderboard', source_index=s.source_index) }}">{{ t('live_leaderboard', 'Leaderboard live') }}</a>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 <section class="panel"><table><thead><tr><th>{{ t('server') }}</th><th>{{ t('track') }}</th><th>{{ t('sessions_count') }}</th><th>{{ t('first_session') }}</th><th>{{ t('last_session_col') }}</th></tr></thead><tbody>
 {% for s in servers %}<tr class="clickable" data-href="{{ url_for('server_detail', server_id=s.id) }}"><td><strong>{{ s.server_name }}</strong></td><td>{{ s.track_name }}</td><td>{{ s.sessions_count }}</td><td>{{ s.first_session_at or t('none') }}</td><td>{{ s.last_session_at or t('none') }}</td></tr>{% else %}<tr><td colspan="5" class="empty">{{ t('no_servers') }}</td></tr>{% endfor %}
 </tbody></table></section>

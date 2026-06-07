@@ -22,6 +22,7 @@
       "path": "C:/Path/To/Assetto Corsa EVO Dedicated Server/result",
       "enabled": true,
       "server_log_path": "C:/Path/To/Assetto Corsa EVO Dedicated Server/serverConfig/Assetto Corsa EVO Server.txt",
+      "live_leaderboard_enabled": false,
       "announce_records": false,
       "announce_name": "My EVO Server",
       "discord_webhook_url": "",

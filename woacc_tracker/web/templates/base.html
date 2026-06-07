@@ -19,7 +19,7 @@
       --font-size-base: {{ theme.font_size|default(16) }}px;
     }
   </style>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=12_1_4">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=13_4_live7">
 </head>
 <body>
 <header class="topbar">
@@ -34,6 +34,9 @@
     <a href="{{ url_for('woacc_community') }}">WOACC</a>
     {% if cfg.password_enabled %}<a href="{{ url_for('logout') }}">{{ t('logout') }}</a>{% endif %}
   </nav>
+  {% if live_servers.has_logs %}
+  <a class="nav-live-summary" href="{{ url_for('servers') }}" data-live-summary data-api-url="{{ url_for('api_live_status') }}" data-active-label="{{ t('active_short', 'Server attivi') }}" data-players-label="{{ t('players_online_short', 'Player online') }}">{{ t('active_short', 'Server attivi') }}: <span data-live-active>{{ live_servers.active_count }}</span> - {{ t('players_online_short', 'Player online') }}: <span data-live-players-total>{{ live_servers.players_online }}</span></a>
+  {% endif %}
   <button type="button" class="share-btn top-share" data-share-page data-copied-text="{{ t('copied_link') }}" data-failed-text="{{ t('copy_failed') }}" title="{{ t('share_current_page') }}">{{ t('share') }}</button>
   <form class="language-form" method="get" action="{{ url_for('set_language', lang_code=lang) }}" data-language-form>
     <label>{{ t('language') }}</label>
@@ -47,7 +50,7 @@
 <main class="container">
   {% block content %}{% endblock %}
 </main>
-<script src="{{ url_for('static', filename='app.js') }}?v=12_1_4"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=13_4_live7"></script>
 <script>
   document.querySelectorAll('[data-language-select]').forEach((select) => {
     select.addEventListener('change', () => { window.location.href = select.value; });

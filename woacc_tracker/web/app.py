@@ -2,6 +2,7 @@ from functools import wraps
 from typing import Any, Dict
 from pathlib import Path
 import ipaddress
+import logging
 from woacc_tracker.core.importer import Importer
 
 from flask import Flask, abort, flash, jsonify, make_response, redirect, render_template, request, send_file, session, url_for
@@ -12,6 +13,7 @@ from woacc_tracker.core.security import verify_password
 from woacc_tracker.core.utils import ms_to_time, format_gap
 from woacc_tracker.core.translations import available_languages, load_vocabulary, pick_language
 from woacc_tracker.core.config import save_config, DEFAULT_WOACC_API_KEY
+from woacc_tracker.core.server_log import is_live_leaderboard_enabled, read_live_server_leaderboard, read_live_servers_status
 
 
 def normalize_base_path(value: str) -> str:
@@ -23,7 +25,21 @@ def normalize_base_path(value: str) -> str:
     return value.rstrip("/")
 
 
+class _LivePollingLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return "/api/live/leaderboard/" not in msg and "/api/live/status" not in msg
+
+
+def _silence_live_polling_logs() -> None:
+    logger = logging.getLogger("werkzeug")
+    if any(isinstance(item, _LivePollingLogFilter) for item in logger.filters):
+        return
+    logger.addFilter(_LivePollingLogFilter())
+
+
 def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
+    _silence_live_polling_logs()
     base_path = normalize_base_path(cfg.get("base_path", ""))
 
     app = Flask(
@@ -66,6 +82,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
     def inject_theme_and_i18n():
         lang = pick_language(request, cfg)
         vocab = load_vocabulary(lang)
+        live_servers = read_live_servers_status(cfg)
 
         def t(key: str, default: str | None = None) -> str:
             return str(vocab.get(key, default if default is not None else key))
@@ -146,6 +163,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             "t": t,
             "conditions_label": conditions_label,
             "base_path": public_base_path,
+            "live_servers": live_servers,
         }
 
     def _safe_local_redirect_target(target: str | None) -> str:
@@ -298,7 +316,8 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 ORDER BY {order} {direction_sql}""",
             tuple(params),
         )
-        return render_template("servers.html", cfg=cfg, servers=rows, q=q, sort=sort, direction=direction)
+        live_status = read_live_servers_status(cfg, include_details=True)
+        return render_template("servers.html", cfg=cfg, servers=rows, live_status=live_status, q=q, sort=sort, direction=direction)
 
     @app.route("/server/<int:server_id>")
     @login_required
@@ -387,6 +406,41 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             sessions=sessions_rows,
             source_rows=source_rows
         )
+
+    @app.route("/live/leaderboard/<int:source_index>")
+    @login_required
+    def live_leaderboard(source_index: int):
+        sources = cfg.get("sources") or []
+        if source_index < 0 or source_index >= len(sources):
+            abort(404)
+        src = sources[source_index]
+        if not src.get("enabled", True):
+            abort(404)
+        if not is_live_leaderboard_enabled(src):
+            abort(404)
+        data = read_live_server_leaderboard(src)
+        return render_template("live_leaderboard.html", cfg=cfg, source=src, source_index=source_index, data=data)
+
+    @app.route("/api/live/leaderboard/<int:source_index>")
+    @login_required
+    def api_live_leaderboard(source_index: int):
+        sources = cfg.get("sources") or []
+        if source_index < 0 or source_index >= len(sources):
+            abort(404)
+        src = sources[source_index]
+        if not src.get("enabled", True) or not is_live_leaderboard_enabled(src):
+            abort(404)
+        return jsonify(read_live_server_leaderboard(src))
+
+    @app.route("/api/live/status")
+    @login_required
+    def api_live_status():
+        live_status = read_live_servers_status(cfg)
+        return jsonify({
+            "has_logs": live_status.get("has_logs", False),
+            "active_count": live_status.get("active_count", 0),
+            "players_online": live_status.get("players_online", 0),
+        })
     
     @app.route("/sessions")
     @login_required

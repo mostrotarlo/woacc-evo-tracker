@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block content %}
+{% set status = data.status %}
+<div class="page-head" data-live-leaderboard data-api-url="{{ url_for('api_live_leaderboard', source_index=source_index) }}" data-empty-laps="{{ t('live_no_laps', 'Nessun giro live rilevato nel log.') }}" data-empty-players="{{ t('live_no_players', 'Nessun player online: la leaderboard live e vuota.') }}" data-empty-filter="{{ t('live_no_filter_results', 'Nessun pilota per questo filtro.') }}" data-none="{{ t('none') }}" data-lap="{{ t('lap') }}" data-time="{{ t('time') }}" data-status="{{ t('status', 'Stato') }}" data-confirm="{{ t('live_lap_candidate', 'Candidato') }}" data-invalid-known="{{ t('live_lap_invalid_known', 'Invalid certo') }}" data-players-label="{{ t('players_online', 'Player online') }}" data-online-label="{{ t('online', 'Online') }}" data-offline-label="{{ t('offline', 'Offline') }}" data-unknown-label="{{ t('live_driver_unknown', 'Non confermato') }}">
+  <a href="{{ url_for('servers') }}">{{ t('back_servers') }}</a>
+  <h1>{{ t('live_leaderboard', 'Leaderboard live') }}</h1>
+  <p>{{ status.server_name or source.name }} - {{ status.track_name or t('unknown_track') }}{% if status.session_type %} - {{ status.session_type }}{% endif %}</p>
+  <p><span data-live-players>{{ t('players_online', 'Player online') }}: {{ status.players_online or 0 }}</span> - {{ t('conditions') }}: {{ conditions_label(status) or t('none') }}</p>
+</div>
+
+<section class="panel">
+  {% if data.race_pending %}
+  <h2>{{ t('live_race_pending_title', 'Classifica race in attesa') }}</h2>
+  <p class="empty">{{ t('live_race_pending_text', 'La classifica live race resta sospesa finche non avremo un log gara reale per capire con certezza come il server trasmette posizione e distacchi.') }}</p>
+  {% else %}
+  <div class="section-head">
+    <h2>{{ t('time_leaderboard') }}</h2>
+    <span class="muted">{{ t('live_provisional_note', 'Provvisoria: i track limits puri non sono sempre scritti nel log') }}</span>
+  </div>
+  <div class="live-filter-controls" data-live-filters>
+    <button type="button" class="active" data-live-driver-filter="all">{{ t('all', 'Tutti') }}</button>
+    <button type="button" data-live-driver-filter="online">{{ t('live_filter_online', 'Solo online') }}</button>
+    <button type="button" data-live-driver-filter="offline">{{ t('live_filter_offline', 'Solo usciti') }}</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t('position') }}</th>
+        <th>{{ t('driver') }}</th>
+        <th>{{ t('car') }}</th>
+        <th>{{ t('best_lap') }}</th>
+        <th>{{ t('gap') }}</th>
+        <th>{{ t('laps') }}</th>
+        <th>{{ t('last_lap', 'Ultimo giro') }}</th>
+        <th>S1</th>
+        <th>S2</th>
+        <th>S3</th>
+      </tr>
+    </thead>
+    <tbody data-live-body>
+      {% for e in data.entries %}
+      {% set online_state = e.online_state or ('online' if e.is_online else 'offline') %}
+      <tr class="entry-row live-entry-row live-driver-{{ online_state }}" data-entry="{{ e.car_id }}" data-driver-online="{{ 1 if e.is_online else 0 }}" data-driver-state="{{ online_state }}">
+        <td>{{ e.position }}</td>
+        <td><strong>{{ e.driver }}</strong> <span class="driver-state {{ online_state }}">{% if online_state == 'online' %}{{ t('online', 'Online') }}{% elif online_state == 'offline' %}{{ t('offline', 'Offline') }}{% else %}{{ t('live_driver_unknown', 'Non confermato') }}{% endif %}</span></td>
+        <td>{{ e.car or t('none') }}</td>
+        <td><strong>{{ e.best_lap_ms|lap_time }}</strong></td>
+        <td>{{ e.gap_ms|gap }}</td>
+        <td>{{ e.laps_total }} ({{ e.laps_candidate }})</td>
+        <td>{{ e.last_lap_ms|lap_time }}</td>
+        <td>{{ e.last_s1_ms|lap_time }}</td>
+        <td>{{ e.last_s2_ms|lap_time }}</td>
+        <td>{{ e.last_s3_ms|lap_time }}</td>
+      </tr>
+      <tr class="laps-row" id="laps-{{ e.car_id }}"><td colspan="10"><div class="laps-box"><h3>{{ e.driver }}</h3><table><thead><tr><th>{{ t('lap') }}</th><th>{{ t('time') }}</th><th>{{ t('status', 'Stato') }}</th><th>S1</th><th>S2</th><th>S3</th></tr></thead><tbody>{% for l in e.laps %}<tr><td>{{ l.lap_number }}</td><td>{{ l.lap_time_ms|lap_time }}</td><td>{{ t('live_lap_candidate', 'Candidato') }}</td><td>{{ l.s1_ms|lap_time }}</td><td>{{ l.s2_ms|lap_time }}</td><td>{{ l.s3_ms|lap_time }}</td></tr>{% endfor %}</tbody></table></div></td></tr>
+      {% else %}
+      <tr><td colspan="10" class="empty">{% if (status.players_online or 0) <= 0 %}{{ t('live_no_players', 'Nessun player online: la leaderboard live e vuota.') }}{% else %}{{ t('live_no_laps', 'Nessun giro live rilevato nel log.') }}{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}
