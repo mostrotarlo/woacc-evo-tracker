@@ -1,6 +1,9 @@
+import json
 import sqlite3
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+from .utils import make_server_key
 
 
 class Database:
@@ -18,6 +21,7 @@ class Database:
         with self.connect() as db:
             db.executescript(SCHEMA)
             self._ensure_columns(db)
+            self._backfill_layout_server_keys(db)
             db.commit()
 
     def _ensure_columns(self, db: sqlite3.Connection) -> None:
@@ -71,6 +75,77 @@ class Database:
         add("import_sources", "license_levels_json", "license_levels_json TEXT")
         add("import_sources", "license_started_at", "license_started_at TEXT")
 
+    def _backfill_layout_server_keys(self, db: sqlite3.Connection) -> None:
+        done = db.execute(
+            "SELECT value FROM app_meta WHERE key='layout_server_key_backfill_v1'"
+        ).fetchone()
+        if done:
+            return
+
+        rows = db.execute(
+            """SELECT
+                   sess.id AS session_id,
+                   sess.file_path,
+                   sess.session_datetime,
+                   sess.server_id,
+                   srv.server_name,
+                   srv.track_name,
+                   COALESCE(srv.track_layout, '') AS track_layout
+               FROM sessions sess
+               JOIN servers srv ON srv.id=sess.server_id"""
+        ).fetchall()
+
+        for row in rows:
+            file_path = Path(row["file_path"] or "")
+            if not file_path.exists():
+                continue
+            try:
+                with file_path.open("r", encoding="utf-8-sig") as f:
+                    data = json.load(f)
+            except Exception:
+                continue
+
+            server_name = data.get("server_name") or row["server_name"] or "Unknown server"
+            track_name = data.get("track_name") or row["track_name"] or "Unknown track"
+            track_layout = data.get("track_layout_name") or ""
+            server_key = make_server_key(server_name, track_name, track_layout)
+
+            server = db.execute("SELECT id, first_session_at, last_session_at FROM servers WHERE server_key=?", (server_key,)).fetchone()
+            if server:
+                server_id = int(server["id"])
+                first = min(filter(None, [server["first_session_at"], row["session_datetime"]]))
+                last = max(filter(None, [server["last_session_at"], row["session_datetime"]]))
+                db.execute(
+                    "UPDATE servers SET server_name=?, track_name=?, track_layout=?, first_session_at=?, last_session_at=? WHERE id=?",
+                    (server_name, track_name, track_layout, first, last, server_id),
+                )
+            else:
+                cur = db.execute(
+                    "INSERT INTO servers(server_key, server_name, track_name, track_layout, first_session_at, last_session_at) VALUES(?,?,?,?,?,?)",
+                    (server_key, server_name, track_name, track_layout, row["session_datetime"], row["session_datetime"]),
+                )
+                server_id = int(cur.lastrowid)
+
+            if int(row["server_id"]) != server_id:
+                db.execute("UPDATE sessions SET server_id=? WHERE id=?", (server_id, row["session_id"]))
+
+        db.execute("DELETE FROM servers WHERE id NOT IN (SELECT DISTINCT server_id FROM sessions)")
+        server_ids = [int(r[0]) for r in db.execute("SELECT id FROM servers").fetchall()]
+        for server_id in server_ids:
+            bounds = db.execute(
+                "SELECT MIN(session_datetime), MAX(session_datetime) FROM sessions WHERE server_id=?",
+                (server_id,),
+            ).fetchone()
+            if bounds:
+                db.execute(
+                    "UPDATE servers SET first_session_at=?, last_session_at=? WHERE id=?",
+                    (bounds[0], bounds[1], server_id),
+                )
+
+        db.execute(
+            "INSERT OR REPLACE INTO app_meta(key, value) VALUES('layout_server_key_backfill_v1', 'done')"
+        )
+
     def execute(self, sql: str, params: Tuple = ()) -> sqlite3.Cursor:
         with self.connect() as db:
             cur = db.execute(sql, params)
@@ -108,6 +183,11 @@ CREATE TABLE IF NOT EXISTS import_sources (
     license_webhook_url TEXT,
     license_levels_json TEXT,
     license_started_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS app_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
 );
 
 CREATE TABLE IF NOT EXISTS import_files (

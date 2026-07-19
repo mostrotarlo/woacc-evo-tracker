@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-head">
   <a href="{{ url_for('server_detail', server_id=sess.server_id) }}">{{ t('back_servers') }}</a>
-  <h1>{{ sess.session_type }} - {{ sess.track_name }}</h1>
+  <h1>{{ sess.session_type }} - {{ track_label(sess) }}</h1>
   <p>{{ sess.server_name }} - {{ sess.session_datetime }}</p>
   <p>{{ t('drivers') }}: {{ sess.drivers_count }} - {{ t('laps') }}: {{ sess.laps_total }} - {{ t('best_lap') }}: {{ sess.best_lap_ms|lap_time }}</p>
 </div>

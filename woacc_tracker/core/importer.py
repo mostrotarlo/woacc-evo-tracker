@@ -592,6 +592,7 @@ class Importer:
             parsed.get("server_name") or src["name"],
             parsed.get("track_name") or "",
             parsed.get("session_datetime") or "",
+            parsed.get("track_layout") or "",
             top_rows,
             detailed,
             self._notification_language(),

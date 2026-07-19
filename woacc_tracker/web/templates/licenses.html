@@ -38,7 +38,7 @@
         <td>{{ r.driver_name }}</td>
         <td><span class="badge">{{ r.license_name }}</span></td>
         <td>{{ r.best_time_ms|lap_time }}</td>
-        <td>{{ r.track_name or '—' }}</td>
+        <td>{{ track_label(r) }}</td>
         <td>{{ t('session_type_' ~ (r.session_type or '')|lower, r.session_type or '—') }}</td>
       </tr>
     {% else %}
@@ -68,7 +68,7 @@
         <td>{{ r.driver_name }}</td>
         <td><span class="badge">{{ r.license_name }}</span></td>
         <td>{{ r.best_time_ms|lap_time }}</td>
-        <td>{{ r.track_name or '—' }}</td>
+        <td>{{ track_label(r) }}</td>
         <td>{{ t('session_type_' ~ (r.session_type or '')|lower, r.session_type or '—') }}</td>
       </tr>
     {% else %}

@@ -4,7 +4,7 @@
 <div class="page-head" data-live-leaderboard data-api-url="{{ url_for('api_live_leaderboard', source_index=source_index) }}" data-empty-laps="{{ t('live_no_laps', 'Nessun giro live rilevato nel log.') }}" data-empty-players="{{ t('live_no_players', 'Nessun player online: la leaderboard live e vuota.') }}" data-empty-filter="{{ t('live_no_filter_results', 'Nessun pilota per questo filtro.') }}" data-none="{{ t('none') }}" data-lap="{{ t('lap') }}" data-time="{{ t('time') }}" data-status="{{ t('status', 'Stato') }}" data-confirm="{{ t('live_lap_candidate', 'Candidato') }}" data-invalid-known="{{ t('live_lap_invalid_known', 'Invalid certo') }}" data-players-label="{{ t('players_online', 'Player online') }}" data-online-label="{{ t('online', 'Online') }}" data-offline-label="{{ t('offline', 'Offline') }}" data-unknown-label="{{ t('live_driver_unknown', 'Non confermato') }}">
   <a href="{{ url_for('servers') }}">{{ t('back_servers') }}</a>
   <h1>{{ t('live_leaderboard', 'Leaderboard live') }}</h1>
-  <p>{{ status.server_name or source.name }} - {{ status.track_name or t('unknown_track') }}{% if status.session_type %} - {{ status.session_type }}{% endif %}</p>
+  <p>{{ status.server_name or source.name }} - {{ track_label(status) }}{% if status.session_type %} - {{ status.session_type }}{% endif %}</p>
   <p><span data-live-players>{{ t('players_online', 'Player online') }}: {{ status.players_online or 0 }}</span> - {{ t('conditions') }}: {{ conditions_label(status) or t('none') }}</p>
 </div>
 

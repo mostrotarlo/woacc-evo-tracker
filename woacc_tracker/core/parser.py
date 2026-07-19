@@ -103,6 +103,7 @@ def parse_evo_results(path: Path) -> Dict[str, Any]:
 
     server_name = data.get("server_name") or "Unknown server"
     track_name = data.get("track_name") or "Unknown track"
+    track_layout = data.get("track_layout_name") or ""
     session_type = data.get("session_type") or "Unknown"
     session_dt = parse_datetime_from_filename(str(path))
 
@@ -222,8 +223,8 @@ def parse_evo_results(path: Path) -> Dict[str, Any]:
         "file_path": str(path),
         "server_name": server_name,
         "track_name": track_name,
-        "track_layout": data.get("track_layout_name") or "",
-        "server_key": make_server_key(server_name, track_name),
+        "track_layout": track_layout,
+        "server_key": make_server_key(server_name, track_name, track_layout),
         "session_name": data.get("session_name") or "",
         "session_type": session_type,
         "session_datetime": session_dt,

@@ -87,6 +87,17 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         def t(key: str, default: str | None = None) -> str:
             return str(vocab.get(key, default if default is not None else key))
 
+        def track_label(row: Any) -> str:
+            def get(key: str):
+                try:
+                    return row[key]
+                except Exception:
+                    return getattr(row, key, None)
+
+            name = str(get("track_name") or t("unknown_track", "Unknown track")).strip()
+            layout = str(get("track_layout") or "").strip()
+            return f"{name} / {layout}" if layout else name
+
         def conditions_label(row: Any) -> str:
             def get(key: str):
                 try:
@@ -161,6 +172,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             "lang": lang,
             "languages": available_languages(),
             "t": t,
+            "track_label": track_label,
             "conditions_label": conditions_label,
             "base_path": public_base_path,
             "live_servers": live_servers,
@@ -273,7 +285,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             """SELECT
                 (SELECT COUNT(*) FROM servers) AS servers,
                 (SELECT COUNT(*) FROM sessions) AS sessions,
-                (SELECT COUNT(DISTINCT track_name) FROM servers) AS tracks,
+                (SELECT COUNT(DISTINCT track_name || '::' || COALESCE(track_layout,'')) FROM servers) AS tracks,
                 (SELECT MAX(session_datetime) FROM sessions) AS last_session
             """
         )
@@ -287,7 +299,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                LIMIT 8"""
         )
         sessions = db.query(
-            """SELECT sess.*, srv.server_name, srv.track_name
+            """SELECT sess.*, srv.server_name, srv.track_name, srv.track_layout
                FROM sessions sess JOIN servers srv ON srv.id=sess.server_id
                ORDER BY sess.session_datetime DESC LIMIT 12"""
         )
@@ -299,14 +311,14 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         q = (request.args.get("q") or "").strip().lower()
         sort = request.args.get("sort") or "last"
         direction = request.args.get("dir") or "desc"
-        order_map = {"name": "s.server_name", "track": "s.track_name", "first": "s.first_session_at", "last": "s.last_session_at", "sessions": "sessions_count"}
+        order_map = {"name": "s.server_name", "track": "s.track_name, COALESCE(s.track_layout,'')", "first": "s.first_session_at", "last": "s.last_session_at", "sessions": "sessions_count"}
         order = order_map.get(sort, "s.last_session_at")
         direction_sql = "ASC" if direction == "asc" else "DESC"
         params = []
         where = ""
         if q:
-            where = "WHERE lower(s.server_name) LIKE ? OR lower(s.track_name) LIKE ?"
-            params.extend([f"%{q}%", f"%{q}%"])
+            where = "WHERE lower(s.server_name) LIKE ? OR lower(s.track_name) LIKE ? OR lower(COALESCE(s.track_layout,'')) LIKE ?"
+            params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
         rows = db.query(
             f"""SELECT s.*, COUNT(sess.id) AS sessions_count
                 FROM servers s
@@ -451,8 +463,8 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         params = []
         clauses = []
         if q:
-            clauses.append("(lower(srv.server_name) LIKE ? OR lower(srv.track_name) LIKE ?)")
-            params.extend([f"%{q}%", f"%{q}%"])
+            clauses.append("(lower(srv.server_name) LIKE ? OR lower(srv.track_name) LIKE ? OR lower(COALESCE(srv.track_layout,'')) LIKE ?)")
+            params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
         if stype:
             clauses.append("sess.session_type=?")
             params.append(stype)
@@ -461,7 +473,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             clauses.append(condition_sql)
         where = "WHERE " + " AND ".join(clauses) if clauses else ""
         rows = db.query(
-            f"""SELECT sess.*, srv.server_name, srv.track_name
+            f"""SELECT sess.*, srv.server_name, srv.track_name, srv.track_layout
                 FROM sessions sess JOIN servers srv ON srv.id=sess.server_id
                 {where}
                 ORDER BY sess.session_datetime DESC""",
@@ -503,7 +515,13 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         Il risultato prende il miglior giro valido di ogni pilota/auto nelle sessioni filtrate.
         """
         server_q = (request.args.get("server_q") or "").strip()
-        track = (request.args.get("track") or "").strip()
+        track_value = (request.args.get("track") or "").strip()
+        track = ""
+        track_layout = ""
+        if track_value:
+            parts = track_value.split("||", 1)
+            track = parts[0].strip()
+            track_layout = parts[1].strip() if len(parts) > 1 else ""
         stype = (request.args.get("type") or "").strip()
         condition = (request.args.get("condition") or "").strip().lower()
 
@@ -514,12 +532,12 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             track_params.append(f"%{server_q.lower()}%")
         track_where = "WHERE " + " AND ".join(track_clauses) if track_clauses else ""
         tracks = db.query(
-            f"""SELECT srv.track_name, COUNT(sess.id) AS sessions_count
+            f"""SELECT srv.track_name, COALESCE(srv.track_layout, '') AS track_layout, COUNT(sess.id) AS sessions_count
                 FROM servers srv
                 JOIN sessions sess ON sess.server_id=srv.id
                 {track_where}
-                GROUP BY srv.track_name
-                ORDER BY srv.track_name ASC""",
+                GROUP BY srv.track_name, COALESCE(srv.track_layout, '')
+                ORDER BY srv.track_name ASC, COALESCE(srv.track_layout, '') ASC""",
             tuple(track_params),
         )
 
@@ -531,6 +549,8 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         if track:
             clauses.append("srv.track_name = ?")
             params.append(track)
+            clauses.append("COALESCE(srv.track_layout, '') = ?")
+            params.append(track_layout)
         if stype:
             clauses.append("sess.session_type = ?")
             params.append(stype)
@@ -558,7 +578,8 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                         sess.track_grip,
                         sess.wind_speed_m_s,
                         srv.server_name,
-                        srv.track_name
+                        srv.track_name,
+                        COALESCE(srv.track_layout, '') AS track_layout
                     FROM session_entries se
                     JOIN drivers d ON d.id=se.driver_id
                     JOIN sessions sess ON sess.id=se.session_id
@@ -603,7 +624,8 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                     best_rows.track_grip,
                     best_rows.wind_speed_m_s,
                     best_rows.server_name,
-                    best_rows.track_name
+                    best_rows.track_name,
+                    best_rows.track_layout
                 FROM best_rows
                 JOIN totals ON totals.driver_id=best_rows.driver_id AND totals.car_name=best_rows.car_name
                 WHERE best_rows.rn=1
@@ -618,7 +640,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             tracks=tracks,
             types=types,
             server_q=server_q,
-            track=track,
+            track=track_value,
             stype=stype,
             condition=condition,
         )
@@ -791,7 +813,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         where = "WHERE " + " AND ".join(clauses) if clauses else ""
 
         ranking = db.query(
-            f"""SELECT la.*, sess.session_type, sess.session_datetime, srv.track_name, srv.server_name
+            f"""SELECT la.*, sess.session_type, sess.session_datetime, srv.track_name, srv.track_layout, srv.server_name
                 FROM license_achievements la
                 LEFT JOIN sessions sess ON sess.id=la.session_id
                 LEFT JOIN servers srv ON srv.id=sess.server_id
@@ -800,7 +822,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             tuple(params),
         )
         latest = db.query(
-            f"""SELECT la.*, sess.session_type, sess.session_datetime, srv.track_name, srv.server_name
+            f"""SELECT la.*, sess.session_type, sess.session_datetime, srv.track_name, srv.track_layout, srv.server_name
                 FROM license_achievements la
                 LEFT JOIN sessions sess ON sess.id=la.session_id
                 LEFT JOIN servers srv ON srv.id=sess.server_id

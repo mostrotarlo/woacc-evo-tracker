@@ -16,8 +16,10 @@ def normalize_text(s: str) -> str:
     return s
 
 
-def make_server_key(server_name: str, track_name: str) -> str:
-    return f"{normalize_text(server_name)}::{normalize_text(track_name)}"
+def make_server_key(server_name: str, track_name: str, track_layout: str = "") -> str:
+    base = f"{normalize_text(server_name)}::{normalize_text(track_name)}"
+    layout = normalize_text(track_layout)
+    return f"{base}::{layout}" if layout else base
 
 
 def ms_to_time(ms: Optional[int]) -> str:

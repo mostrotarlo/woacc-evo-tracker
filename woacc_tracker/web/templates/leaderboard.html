@@ -14,7 +14,7 @@
   <select name="track">
     <option value="">{{ t('all_tracks') }}</option>
     {% for tr in tracks %}
-    <option value="{{ tr.track_name }}" {% if track==tr.track_name %}selected{% endif %}>{{ tr.track_name }} ({{ tr.sessions_count }})</option>
+    <option value="{{ tr.track_name }}||{{ tr.track_layout }}" {% if track==(tr.track_name ~ '||' ~ tr.track_layout) %}selected{% endif %}>{{ track_label(tr) }} ({{ tr.sessions_count }})</option>
     {% endfor %}
   </select>
   <select name="type">
@@ -58,7 +58,7 @@
         <td class="col-count">{{ r.sessions_count }}</td>
         <td>{{ conditions_label(r) or t('none') }}</td>
         <td><div class="clip" title="{{ r.server_name }}">{{ r.server_name }}</div></td>
-        <td><div class="clip track" title="{{ r.track_name }}">{{ r.track_name }}</div></td>
+        <td><div class="clip track" title="{{ track_label(r) }}">{{ track_label(r) }}</div></td>
         <td class="col-date">{{ r.session_datetime }}</td>
       </tr>
       {% else %}

@@ -33,7 +33,7 @@ class QuietLivePollingRequestHandler(WSGIRequestHandler):
 class TrackerDesktop:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("WOACC Tracker v14.0.0")
+        self.root.title("WOACC Tracker v14.1.0")
         self.root.geometry("1150x760")
         self.cfg = load_config()
         self.languages = available_languages()

@@ -32,6 +32,40 @@ It imports EVO result files automatically, builds web leaderboards and session p
 
 ---
 
+## New in v14.1.0 Track Layout Fix
+
+### Separate track layouts
+
+WOACC Tracker now uses `track_layout_name` from the Assetto Corsa EVO result JSON to distinguish different layouts of the same track.
+
+Examples:
+
+```text
+Monza / GP
+Monza / Mini
+```
+
+These are now treated as separate tracks in:
+
+- server grouping
+- sessions
+- filtered leaderboard
+- records
+- licenses
+- live leaderboard labels
+- Discord session notifications
+- WOACC Bridge API metadata
+
+### Historical data migration
+
+On first start after updating, WOACC Tracker tries to fix already imported sessions by reading the original JSON files still stored in their saved paths.
+
+If the original JSON files are still available, old sessions are moved into the correct `track / layout` grouping automatically.
+
+If the original JSON files were deleted or moved, those old sessions cannot be corrected with certainty and remain as previously imported.
+
+---
+
 ## New in v14.0.0 Live Server Monitoring
 
 ### Live leaderboard from server logs
@@ -535,19 +569,19 @@ The compiled executable should be published in **GitHub Releases**, not committe
 Suggested tag:
 
 ```text
-v14.0.0
+v14.1.0
 ```
 
 Suggested release title:
 
 ```text
-WOACC EVO Tracker v14.0.0 Live Server Monitoring
+WOACC EVO Tracker v14.1.0 Track Layout Fix
 ```
 
 Short release summary:
 
 ```text
-This release adds optional live leaderboard monitoring from Assetto Corsa EVO Server.txt, online server cards, live player counts, sector display, driver online/offline states, log sync/reset tools, performance-oriented log caching, and complete setup guides in Italian and English.
+This release fixes track layout handling by using track_layout_name from EVO result JSON files. Different layouts of the same circuit, such as Monza / GP and Monza / Mini, are now treated as separate tracks across sessions, leaderboards, records, licenses, live labels, Discord notifications, and API metadata. Existing imported sessions are migrated when the original JSON files are still available.
 ```
 
 ---

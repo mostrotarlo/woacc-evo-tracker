@@ -13,7 +13,7 @@
         <span class="badge live">{{ t('online', 'Online') }}</span>
       </div>
       <div class="live-card-row"><span>{{ t('session_type') }}</span><strong>{{ s.session_type or t('none') }}</strong></div>
-      <div class="live-card-row"><span>{{ t('track') }}</span><strong>{{ s.track_name or t('unknown_track') }}</strong></div>
+      <div class="live-card-row"><span>{{ t('track') }}</span><strong>{{ track_label(s) }}</strong></div>
       <div class="live-card-row"><span>{{ t('conditions') }}</span><strong>{{ conditions_label(s) or t('none') }}</strong></div>
       <div class="live-card-row"><span>{{ t('players_online', 'Player online') }}</span><strong>{{ s.players_online or 0 }}</strong></div>
       <a class="live-link" href="{{ url_for('live_leaderboard', source_index=s.source_index) }}">{{ t('live_leaderboard', 'Leaderboard live') }}</a>
@@ -23,6 +23,6 @@
 </section>
 {% endif %}
 <section class="panel"><table><thead><tr><th>{{ t('server') }}</th><th>{{ t('track') }}</th><th>{{ t('sessions_count') }}</th><th>{{ t('first_session') }}</th><th>{{ t('last_session_col') }}</th></tr></thead><tbody>
-{% for s in servers %}<tr class="clickable" data-href="{{ url_for('server_detail', server_id=s.id) }}"><td><strong>{{ s.server_name }}</strong></td><td>{{ s.track_name }}</td><td>{{ s.sessions_count }}</td><td>{{ s.first_session_at or t('none') }}</td><td>{{ s.last_session_at or t('none') }}</td></tr>{% else %}<tr><td colspan="5" class="empty">{{ t('no_servers') }}</td></tr>{% endfor %}
+{% for s in servers %}<tr class="clickable" data-href="{{ url_for('server_detail', server_id=s.id) }}"><td><strong>{{ s.server_name }}</strong></td><td>{{ track_label(s) }}</td><td>{{ s.sessions_count }}</td><td>{{ s.first_session_at or t('none') }}</td><td>{{ s.last_session_at or t('none') }}</td></tr>{% else %}<tr><td colspan="5" class="empty">{{ t('no_servers') }}</td></tr>{% endfor %}
 </tbody></table></section>
 {% endblock %}

@@ -52,6 +52,7 @@ def post_session_notification(
     server_name: str,
     track_name: str,
     session_datetime: str,
+    track_layout: str = "",
     top_rows: Optional[List[Dict[str, Any]]] = None,
     detailed: bool = False,
     lang: str = DEFAULT_LANGUAGE,
@@ -63,14 +64,17 @@ def post_session_notification(
     title = _tr(
         lang,
         "discord_session_available_title",
-        "📢 New session available"
+        "ðŸ“¢ New session available"
     )
 
     session_url = _tracker_url(session_id)
+    track_label = track_name or _tr(lang, 'unknown_track', 'Unknown track')
+    if track_layout:
+        track_label = f"{track_label} / {track_layout}"
 
     desc = (
         f"**{announce_name or server_name or 'WOACC Tracker'}**\n"
-        f"{track_name or _tr(lang, 'unknown_track', 'Unknown track')} · "
+        f"{track_label} · "
         f"{translated_session_type}\n"
         f"{session_datetime or ''}"
     )
@@ -93,14 +97,14 @@ def post_session_notification(
         lines = []
 
         for i, r in enumerate(top_rows[:3], start=1):
-            name = r.get("driver_name") or r.get("display_name") or "—"
+            name = r.get("driver_name") or r.get("display_name") or "â€”"
             lap = r.get("best_lap_ms")
             car = r.get("car_name") or ""
-            value = ms_to_time(int(lap)) if lap else "—"
+            value = ms_to_time(int(lap)) if lap else "â€”"
 
             lines.append(
-                f"**P{i}** {name} — **{value}**"
-                f"{(' · ' + car) if car else ''}"
+                f"**P{i}** {name} â€” **{value}**"
+                f"{(' Â· ' + car) if car else ''}"
             )
 
         if lines:
@@ -140,25 +144,25 @@ def post_license_notification(
     payload = {
         "username": "WOACC Tracker",
         "embeds": [{
-            "title": _tr(lang, "discord_license_title", "🏅 New license achieved"),
+            "title": _tr(lang, "discord_license_title", "ðŸ… New license achieved"),
             "description": _tr(
                 lang,
                 "discord_license_description",
                 "**{driver}** achieved license **{license}**"
             ).format(
-                driver=driver_name or "—",
-                license=license_name or "—"
+                driver=driver_name or "â€”",
+                license=license_name or "â€”"
             ),
             "color": 15844367,
             "fields": [
                 {
                     "name": _tr(lang, "discord_driver", "Driver"),
-                    "value": driver_name or "—",
+                    "value": driver_name or "â€”",
                     "inline": True,
                 },
                 {
                     "name": _tr(lang, "discord_license", "License"),
-                    "value": license_name or "—",
+                    "value": license_name or "â€”",
                     "inline": True,
                 },
                 {
@@ -168,7 +172,7 @@ def post_license_notification(
                 },
             ],
             "footer": {
-                "text": _tr(lang, "discord_footer_license", "WOACC Tracker • License")
+                "text": _tr(lang, "discord_footer_license", "WOACC Tracker â€¢ License")
             },
         }]
     }
