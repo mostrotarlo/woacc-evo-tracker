@@ -33,7 +33,7 @@ class QuietLivePollingRequestHandler(WSGIRequestHandler):
 class TrackerDesktop:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("WOACC Tracker v14.1.0")
+        self.root.title("WOACC Tracker v14.1.1")
         self.root.geometry("1150x760")
         self.cfg = load_config()
         self.languages = available_languages()
@@ -51,6 +51,7 @@ class TrackerDesktop:
         self._build_ui()
         self._load_sources_to_tree()
         self._log(self._t("desktop_ready", "Application ready"))
+        self.root.after(700, self._auto_start_tracker_if_enabled)
 
 
     def _t(self, key: str, default: str = None) -> str:
@@ -123,6 +124,7 @@ class TrackerDesktop:
         self.base_path_var = tk.StringVar(value=self.cfg.get("base_path", ""))
         self.password_enabled_var = tk.BooleanVar(value=bool(self.cfg.get("password_enabled")))
         self.woacc_share_var = tk.BooleanVar(value=bool(self.cfg.get("woacc_api_enabled", True)))
+        self.auto_start_tracker_var = tk.BooleanVar(value=bool(self.cfg.get("auto_start_tracker", False)))
         self.password_var = tk.StringVar(value="")
         self.scan_interval_var = tk.IntVar(value=int(self.cfg.get("scan_interval_sec", 10)))
         self.language_var = tk.StringVar(value=self._language_display(self.lang))
@@ -144,9 +146,10 @@ class TrackerDesktop:
         ttk.Checkbutton(general, text=self._t("desktop_remote_access", "Remote / LAN access (bind 0.0.0.0)"), variable=self.remote_var).grid(row=6, column=1, sticky="w", pady=5)
         ttk.Checkbutton(general, text=self._t("desktop_woacc_share", "Share data with WOACC (Bridge API enabled)"), variable=self.woacc_share_var).grid(row=7, column=1, sticky="w", pady=5)
         ttk.Label(general, text=self._t("desktop_woacc_share_hint", "Enabled by default. Disable only if you do not want ACC_JSON_Monitor_Plus 2 to import this tracker.")).grid(row=7, column=2, sticky="w", pady=5)
-        ttk.Checkbutton(general, text=self._t("desktop_password_protect", "Protect web app with password"), variable=self.password_enabled_var).grid(row=8, column=1, sticky="w", pady=5)
-        ttk.Label(general, text=self._t("desktop_new_password", "New password (leave empty to keep current)")).grid(row=9, column=0, sticky="w", pady=5)
-        ttk.Entry(general, textvariable=self.password_var, show="*", width=35).grid(row=9, column=1, sticky="w", pady=5, padx=8)
+        ttk.Checkbutton(general, text=self._t("desktop_auto_start_tracker", "Start tracker automatically when the app opens"), variable=self.auto_start_tracker_var).grid(row=8, column=1, sticky="w", pady=5)
+        ttk.Checkbutton(general, text=self._t("desktop_password_protect", "Protect web app with password"), variable=self.password_enabled_var).grid(row=9, column=1, sticky="w", pady=5)
+        ttk.Label(general, text=self._t("desktop_new_password", "New password (leave empty to keep current)")).grid(row=10, column=0, sticky="w", pady=5)
+        ttk.Entry(general, textvariable=self.password_var, show="*", width=35).grid(row=10, column=1, sticky="w", pady=5, padx=8)
 
         actions = ttk.LabelFrame(frm, text=self._t("desktop_actions", "Actions"), padding=12)
         actions.pack(fill="x", pady=12)
@@ -358,6 +361,7 @@ class TrackerDesktop:
         self.cfg["base_path"] = self.base_path_var.get().strip()
         self.cfg["password_enabled"] = bool(self.password_enabled_var.get())
         self.cfg["woacc_api_enabled"] = bool(self.woacc_share_var.get())
+        self.cfg["auto_start_tracker"] = bool(self.auto_start_tracker_var.get())
         self.cfg["woacc_api_key"] = (self.cfg.get("woacc_api_key") or DEFAULT_WOACC_API_KEY).strip() or DEFAULT_WOACC_API_KEY
         self.cfg["scan_interval_sec"] = int(self.scan_interval_var.get())
         self.cfg["language"] = self._language_from_display(self.language_var.get())
@@ -828,12 +832,17 @@ class TrackerDesktop:
         self.refresh_stats()
         messagebox.showinfo(self._t("desktop_import_completed", "Import completed"), str(stats_total))
 
-    def start_tracker(self):
+    def _auto_start_tracker_if_enabled(self):
+        if self.cfg.get("auto_start_tracker", False):
+            self._log(self._t("desktop_auto_starting_tracker", "Automatic tracker startup enabled"))
+            self.start_tracker(automatic=True)
+
+    def start_tracker(self, automatic=False):
         if self.running:
             return
         self.save_settings()
         if not any(s.get("enabled", True) for s in self.cfg.get("sources", [])):
-            if not messagebox.askyesno(self._t("desktop_no_folder", "No folder"), self._t("desktop_no_active_folders_prompt", "There are no active folders. Start only the web app?")):
+            if not automatic and not messagebox.askyesno(self._t("desktop_no_folder", "No folder"), self._t("desktop_no_active_folders_prompt", "There are no active folders. Start only the web app?")):
                 return
         try:
             app = create_app(self.db, self.cfg)
@@ -850,9 +859,14 @@ class TrackerDesktop:
             self._log(self._t("desktop_web_started", "Web app started on {host}:{port}").format(host=host, port=port))
             self.refresh_stats()
         except OSError as exc:
-            messagebox.showerror(self._t("desktop_start_error", "Startup error"), self._t("desktop_start_error_detail", "Unable to start the web server. Port busy or invalid.\n{exc}").format(exc=exc))
+            message = self._t("desktop_start_error_detail", "Unable to start the web server. Port busy or invalid.\n{exc}").format(exc=exc)
+            self._log(message)
+            if not automatic:
+                messagebox.showerror(self._t("desktop_start_error", "Startup error"), message)
         except Exception as exc:
-            messagebox.showerror(self._t("desktop_start_error", "Startup error"), str(exc))
+            self._log(str(exc))
+            if not automatic:
+                messagebox.showerror(self._t("desktop_start_error", "Startup error"), str(exc))
 
     def stop_tracker(self):
         if self.monitor:

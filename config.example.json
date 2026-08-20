@@ -14,6 +14,7 @@
   "weekly_recap_webhook_url": "",
   "weekly_recap_started_at": "",
   "weekly_recap_last_sent_at": "",
+  "auto_start_tracker": true,
   "scan_interval_sec": 60,
   "database_path": "%APPDATA%/WOACC_Tracker/woacc_tracker.db",
   "sources": [

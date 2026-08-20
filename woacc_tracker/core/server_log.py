@@ -119,15 +119,24 @@ def _weather_from_definition(ts: Optional[datetime], definition: Dict[str, Any])
     static_weather = (((weather.get("static_data") or {}).get("static_weather") or {}))
     dynamic_track = weather.get("dynamic_track_condition") or session.get("dynamic_track_condition") or {}
 
+    ambient_temperature = static_weather.get("ambient_temperature_c")
+    mean_ambient_temperature = static_weather.get("mean_ambient_temperature_c")
+    if ambient_temperature in (None, 0, 0.0) and mean_ambient_temperature is not None:
+        ambient_temperature = mean_ambient_temperature
+
+    sky_coverage = static_weather.get("sky_coverage")
+    if sky_coverage is None:
+        sky_coverage = static_weather.get("cloud_coverage")
+
     return {
         "weather_log_at": ts.isoformat(timespec="seconds") if ts else "",
         "server_name": definition.get("name") or "",
         "session_type": _clean_enum(definition.get("gamemode_type") or session.get("name")),
         "track_name": track.get("name") or "",
         "track_layout": scene.get("track_layout_name") or "",
-        "ambient_temperature_c": static_weather.get("ambient_temperature_c"),
+        "ambient_temperature_c": ambient_temperature,
         "weather_type": _clean_enum(weather.get("weather_type") or session.get("weather_type")),
-        "sky_coverage": static_weather.get("sky_coverage"),
+        "sky_coverage": sky_coverage,
         "gloominess": static_weather.get("gloominess"),
         "precipitation": static_weather.get("precipitation"),
         "fog": static_weather.get("fog"),

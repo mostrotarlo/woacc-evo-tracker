@@ -31,6 +31,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "weekly_recap_webhook_url": "",
     "weekly_recap_started_at": "",
     "weekly_recap_last_sent_at": "",
+    "auto_start_tracker": True,
     "scan_interval_sec": 10,
     "language": "it",
     "database_path": str(DB_PATH),

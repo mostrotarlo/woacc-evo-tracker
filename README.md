@@ -32,6 +32,26 @@ It imports EVO result files automatically, builds web leaderboards and session p
 
 ---
 
+## New in v14.1.1 Autostart Fix
+
+### Automatic tracker startup
+
+When WOACC Tracker is opened automatically after a Windows restart, the tracker service now starts on its own too.
+
+The desktop app includes a new option:
+
+```text
+Start tracker automatically when the app opens
+```
+
+This avoids the previous situation where Windows opened the desktop app but the web tracker and folder monitor waited for the manual **Start Tracker** button.
+
+### Conditions fallback
+
+Server log condition parsing now also accepts fallback fields for ambient temperature and sky coverage when the dedicated server writes them with alternate names.
+
+---
+
 ## New in v14.1.0 Track Layout Fix
 
 ### Separate track layouts
@@ -569,19 +589,19 @@ The compiled executable should be published in **GitHub Releases**, not committe
 Suggested tag:
 
 ```text
-v14.1.0
+v14.1.1
 ```
 
 Suggested release title:
 
 ```text
-WOACC EVO Tracker v14.1.0 Track Layout Fix
+WOACC EVO Tracker v14.1.1 Autostart Fix
 ```
 
 Short release summary:
 
 ```text
-This release fixes track layout handling by using track_layout_name from EVO result JSON files. Different layouts of the same circuit, such as Monza / GP and Monza / Mini, are now treated as separate tracks across sessions, leaderboards, records, licenses, live labels, Discord notifications, and API metadata. Existing imported sessions are migrated when the original JSON files are still available.
+This release fixes automatic startup after Windows restarts: when the desktop app opens automatically, the tracker service, web app and folder monitor now start without pressing the Start Tracker button. It also improves server condition parsing by accepting fallback fields for ambient temperature and sky coverage.
 ```
 
 ---
