@@ -32,19 +32,19 @@ It imports EVO result files automatically, builds web leaderboards and session p
 
 ---
 
-## New in v14.1.1 Autostart Fix
+## New in v14.1.2 Windows Autostart Fix
 
 ### Automatic tracker startup
 
-When WOACC Tracker is opened automatically after a Windows restart, the tracker service now starts on its own too.
+When the automatic-start option is enabled, WOACC Tracker registers itself to start with Windows. The tracker service, web app and folder monitor then start on their own, without requiring the **Start Tracker** button.
 
-The desktop app includes a new option:
+The desktop app includes this option:
 
 ```text
 Start tracker automatically when the app opens
 ```
 
-This avoids the previous situation where Windows opened the desktop app but the web tracker and folder monitor waited for the manual **Start Tracker** button.
+The setting is applied immediately when the checkbox changes. Disabling it removes the Windows startup registration.
 
 ### Conditions fallback
 
@@ -589,19 +589,19 @@ The compiled executable should be published in **GitHub Releases**, not committe
 Suggested tag:
 
 ```text
-v14.1.1
+v14.1.2
 ```
 
 Suggested release title:
 
 ```text
-WOACC EVO Tracker v14.1.1 Autostart Fix
+WOACC EVO Tracker v14.1.2 Windows Autostart Fix
 ```
 
 Short release summary:
 
 ```text
-This release fixes automatic startup after Windows restarts: when the desktop app opens automatically, the tracker service, web app and folder monitor now start without pressing the Start Tracker button. It also improves server condition parsing by accepting fallback fields for ambient temperature and sky coverage.
+This release makes the automatic-start checkbox register WOACC Tracker directly in Windows startup. When enabled, the desktop app, web server and folder monitor start automatically after Windows login. Disabling the checkbox removes the registration.
 ```
 
 ---

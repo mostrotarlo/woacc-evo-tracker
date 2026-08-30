@@ -1,4 +1,5 @@
 import socket
+import sys
 import threading
 import webbrowser
 from datetime import datetime
@@ -18,6 +19,10 @@ from .core.server_log import is_live_leaderboard_enabled
 from .web.app import create_app
 
 
+WINDOWS_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+WINDOWS_RUN_VALUE = "WOACC Tracker"
+
+
 class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
     daemon_threads = True
 
@@ -33,9 +38,10 @@ class QuietLivePollingRequestHandler(WSGIRequestHandler):
 class TrackerDesktop:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("WOACC Tracker v14.1.1")
+        self.root.title("WOACC Tracker v14.1.2")
         self.root.geometry("1150x760")
         self.cfg = load_config()
+        self._sync_windows_autostart(bool(self.cfg.get("auto_start_tracker", False)))
         self.languages = available_languages()
         self.lang = (self.cfg.get("language") or DEFAULT_LANGUAGE).lower()
         if self.lang not in self.languages:
@@ -146,7 +152,12 @@ class TrackerDesktop:
         ttk.Checkbutton(general, text=self._t("desktop_remote_access", "Remote / LAN access (bind 0.0.0.0)"), variable=self.remote_var).grid(row=6, column=1, sticky="w", pady=5)
         ttk.Checkbutton(general, text=self._t("desktop_woacc_share", "Share data with WOACC (Bridge API enabled)"), variable=self.woacc_share_var).grid(row=7, column=1, sticky="w", pady=5)
         ttk.Label(general, text=self._t("desktop_woacc_share_hint", "Enabled by default. Disable only if you do not want ACC_JSON_Monitor_Plus 2 to import this tracker.")).grid(row=7, column=2, sticky="w", pady=5)
-        ttk.Checkbutton(general, text=self._t("desktop_auto_start_tracker", "Start tracker automatically when the app opens"), variable=self.auto_start_tracker_var).grid(row=8, column=1, sticky="w", pady=5)
+        ttk.Checkbutton(
+            general,
+            text=self._t("desktop_auto_start_tracker", "Start tracker automatically when the app opens"),
+            variable=self.auto_start_tracker_var,
+            command=self._on_auto_start_toggle,
+        ).grid(row=8, column=1, sticky="w", pady=5)
         ttk.Checkbutton(general, text=self._t("desktop_password_protect", "Protect web app with password"), variable=self.password_enabled_var).grid(row=9, column=1, sticky="w", pady=5)
         ttk.Label(general, text=self._t("desktop_new_password", "New password (leave empty to keep current)")).grid(row=10, column=0, sticky="w", pady=5)
         ttk.Entry(general, textvariable=self.password_var, show="*", width=35).grid(row=10, column=1, sticky="w", pady=5, padx=8)
@@ -362,6 +373,7 @@ class TrackerDesktop:
         self.cfg["password_enabled"] = bool(self.password_enabled_var.get())
         self.cfg["woacc_api_enabled"] = bool(self.woacc_share_var.get())
         self.cfg["auto_start_tracker"] = bool(self.auto_start_tracker_var.get())
+        self._sync_windows_autostart(self.cfg["auto_start_tracker"])
         self.cfg["woacc_api_key"] = (self.cfg.get("woacc_api_key") or DEFAULT_WOACC_API_KEY).strip() or DEFAULT_WOACC_API_KEY
         self.cfg["scan_interval_sec"] = int(self.scan_interval_var.get())
         self.cfg["language"] = self._language_from_display(self.language_var.get())
@@ -376,6 +388,42 @@ class TrackerDesktop:
             messagebox.showwarning(self._t("desktop_missing_password", "Missing password"), self._t("desktop_missing_password_detail", "You enabled password protection, but no password is set."))
         save_config(self.cfg)
         self._update_urls()
+        self._log(self._t("desktop_settings_saved", "Settings saved"))
+
+    def _windows_autostart_command(self) -> str:
+        if getattr(sys, "frozen", False):
+            return f'"{Path(sys.executable).resolve()}"'
+        python_path = Path(sys.executable).resolve()
+        script_path = Path(__file__).resolve().parents[1] / "run_tracker.py"
+        return f'"{python_path}" "{script_path}"'
+
+    def _sync_windows_autostart(self, enabled: bool) -> None:
+        if sys.platform != "win32":
+            return
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                WINDOWS_RUN_KEY,
+                0,
+                winreg.KEY_SET_VALUE,
+            ) as key:
+                if enabled:
+                    winreg.SetValueEx(key, WINDOWS_RUN_VALUE, 0, winreg.REG_SZ, self._windows_autostart_command())
+                else:
+                    try:
+                        winreg.DeleteValue(key, WINDOWS_RUN_VALUE)
+                    except FileNotFoundError:
+                        pass
+        except Exception as exc:
+            self._log_safe(f"Windows autostart configuration error: {exc}")
+
+    def _on_auto_start_toggle(self) -> None:
+        enabled = bool(self.auto_start_tracker_var.get())
+        self.cfg["auto_start_tracker"] = enabled
+        self._sync_windows_autostart(enabled)
+        save_config(self.cfg)
         self._log(self._t("desktop_settings_saved", "Settings saved"))
 
     def add_source(self):
