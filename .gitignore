@@ -24,6 +24,7 @@ build_service_engine/
 release/staging/
 tmp/pdfs/
 backups/
+tmp/
 integration/converter_smoke_output/
 integration/**/*.original.py
 release/verification_*.json
