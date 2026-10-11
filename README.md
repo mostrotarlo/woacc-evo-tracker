@@ -1,6 +1,13 @@
-# WOACC EVO & ACC Tracker 15.1.0
+# WOACC EVO & ACC Tracker 15.1.1
 
 ![WOACC EVO & ACC Tracker](docs/assets/woacc-evo-acc-tracker-15.1.0.png)
+
+## v15.1.1 Desktop stop and Windows service fix
+
+Fixes the desktop freeze when stopping the tracker, closing the application or
+switching to the Windows service. Shutdown runs in the background while the
+interface stays responsive. New starts are blocked until shutdown completes.
+Windows service commands have a bounded wait and report pending operations.
 
 ## v15.1.0 Unified ACC/EVO and Windows service
 

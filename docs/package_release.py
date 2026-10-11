@@ -22,11 +22,12 @@ def checksum(path):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--dist", type=Path, default=DIST, help="Complete Windows distribution to package")
     parser.add_argument("--refresh-documents", action="store_true", help="Update documentation in an existing staging tree without replacing binaries")
     args = parser.parse_args()
-    required = [DIST / "WOACC Tracker.exe", DIST / "_internal" / "python314.dll",
-                DIST / "WOACC Tracker Engine" / "WOACC Tracker Engine.exe",
-                DIST / "WOACC Tracker Engine" / "_internal" / "python314.dll", PDF]
+    required = [args.dist / "WOACC Tracker.exe", args.dist / "_internal" / "python314.dll",
+                args.dist / "WOACC Tracker Engine" / "WOACC Tracker Engine.exe",
+                args.dist / "WOACC Tracker Engine" / "_internal" / "python314.dll", PDF]
     for path in required:
         if not path.is_file():
             raise FileNotFoundError(path)
@@ -34,7 +35,7 @@ def main():
         raise FileExistsError(f"Inspect existing staging before rebuilding: {STAGING}")
     STAGING.parent.mkdir(parents=True, exist_ok=True)
     if not STAGING.exists():
-        shutil.copytree(DIST, STAGING)
+        shutil.copytree(args.dist, STAGING)
     manual = STAGING / "Manual"
     manual.mkdir(exist_ok=True)
     shutil.copy2(PDF, manual / PDF.name)

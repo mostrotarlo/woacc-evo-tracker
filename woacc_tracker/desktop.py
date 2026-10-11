@@ -1,6 +1,7 @@
 import socket
 import sys
 import threading
+import queue
 import webbrowser
 from datetime import datetime
 from pathlib import Path
@@ -47,6 +48,8 @@ class TrackerDesktop:
         self.running = False
         self.runtime = None
         self._service_busy = False
+        self._local_stop_busy = False
+        self._close_after_stop = False
         self._manual_import_running = False
         self._build_ui()
         self._load_sources_to_tree()
@@ -1049,7 +1052,7 @@ class TrackerDesktop:
             self.start_tracker(automatic=True)
 
     def start_tracker(self, automatic=False):
-        if self._service_busy:
+        if self._service_busy or self._local_stop_busy:
             return
         if service_status() not in {"not_installed", "unavailable"}:
             if not automatic:
@@ -1081,18 +1084,55 @@ class TrackerDesktop:
                 messagebox.showerror(self._t("desktop_start_error", "Startup error"), str(exc))
 
     def stop_tracker(self):
+        if self._service_busy or self._local_stop_busy:
+            return
         if service_status() not in {"not_installed", "unavailable"} and not self.running:
             self._service_action("stop")
             return
         self._stop_local_tracker()
 
-    def _stop_local_tracker(self):
-        if self.runtime:
-            self.runtime.stop()
-            self.runtime = None
+    def _stop_local_tracker(self, close_after=False):
+        self._close_after_stop = self._close_after_stop or close_after
+        if self._local_stop_busy:
+            return
+        if self.runtime is not None:
+            self._local_stop_busy = True
+            self.status_var.set(self._t("desktop_service_pending", "Operation in progress"))
+            runtime = self.runtime
+            self._local_stop_results = queue.SimpleQueue()
+            def worker():
+                error = None
+                try:
+                    runtime.stop()
+                except Exception as exc:
+                    error = str(exc)
+                self._local_stop_results.put(error)
+            threading.Thread(target=worker, daemon=True).start()
+            self.root.after(100, self._poll_local_stop)
+            return
+        self._local_stop_done()
+
+    def _poll_local_stop(self):
+        try:
+            error = self._local_stop_results.get_nowait()
+        except queue.Empty:
+            self.root.after(100, self._poll_local_stop)
+            return
+        self._local_stop_busy = False
+        if error is not None:
+            self._close_after_stop = False
+            self._log(error)
+            messagebox.showerror(self._t("desktop_start_error", "Tracker error"), error)
+            return
+        self.runtime = None
+        self._local_stop_done()
+
+    def _local_stop_done(self):
         self.running = False
         self.status_var.set(self._t("desktop_status_stopped", "STOPPED"))
         self._log(self._t("desktop_tracker_stopped", "Tracker stopped"))
+        if self._close_after_stop:
+            self.root.destroy()
 
     def _refresh_service_status(self):
         state = service_status()
@@ -1104,12 +1144,12 @@ class TrackerDesktop:
             self.status_var.set(labels.get(state, state))
 
     def _poll_service_status(self):
-        if not self._service_busy:
+        if not self._service_busy and not self._local_stop_busy:
             self._refresh_service_status()
         self.root.after(5000, self._poll_service_status)
 
     def _service_action(self, action):
-        if self._service_busy:
+        if self._service_busy or self._local_stop_busy:
             return
         try:
             from .windows_service import engine_path
@@ -1129,28 +1169,48 @@ class TrackerDesktop:
                 return
             self.save_settings()
             self._restore_local_after_service_failure = self.running
-            if self.running:
-                self._stop_local_tracker()
             self._service_busy = True
             self.service_status_var.set(self._t("desktop_service_pending", "Operation in progress"))
+            runtime = self.runtime
+            self._service_results = queue.SimpleQueue()
             def worker():
                 error = None
+                stopped = False
+                restore = True
                 try:
+                    # Joining the monitor on the UI thread can deadlock its Tk logging.
+                    if runtime is not None:
+                        runtime.stop()
+                    stopped = True
                     run_service_action(action, CONFIG_PATH.resolve())
                 except Exception as exc:
                     error = str(exc)
-                self.root.after(0, lambda: self._service_action_done(error))
+                    restore = not isinstance(exc, TimeoutError)
+                self._service_results.put((error, stopped, restore))
             threading.Thread(target=worker, daemon=True).start()
+            self.root.after(100, self._poll_service_action)
         except Exception as exc:
             messagebox.showerror(self._t("desktop_windows_service", "Windows service"), str(exc))
 
-    def _service_action_done(self, error):
+    def _poll_service_action(self):
+        try:
+            error, stopped, restore = self._service_results.get_nowait()
+        except queue.Empty:
+            self.root.after(100, self._poll_service_action)
+            return
+        if stopped:
+            self.runtime = None
+            self.running = False
+            self.status_var.set(self._t("desktop_status_stopped", "STOPPED"))
+        self._service_action_done(error, restore=restore)
+
+    def _service_action_done(self, error, restore=True):
         self._service_busy = False
         self._refresh_service_status()
         self._sync_windows_autostart(bool(self.cfg.get("auto_start_tracker")))
         if error:
             messagebox.showerror(self._t("desktop_windows_service", "Windows service"), error)
-            if getattr(self, "_restore_local_after_service_failure", False) and service_status() == "not_installed":
+            if restore and getattr(self, "_restore_local_after_service_failure", False) and service_status() == "not_installed":
                 self.start_tracker(automatic=True)
         else:
             self._log(self._t("desktop_service_done", "Service operation completed"))
@@ -1159,8 +1219,7 @@ class TrackerDesktop:
         if self._service_busy:
             return
         # Closing the control panel must not stop the Windows service.
-        self._stop_local_tracker()
-        self.root.destroy()
+        self._stop_local_tracker(close_after=True)
 
     def open_woacc_community(self):
         public_url = (self.public_url_var.get() or self.cfg.get("public_url", "") or "").strip()

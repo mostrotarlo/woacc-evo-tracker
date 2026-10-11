@@ -14,6 +14,10 @@ dist_v15/
 build_v15_0_1/
 dist_v15_0_1/
 dist_service/
+dist_service_fixed/
+dist_service_stopfix/
+dist_service_15_1_1/
+dist_service_engine_15_1_1/
 dist_service_engine/
 build_service_desktop/
 build_service_engine/

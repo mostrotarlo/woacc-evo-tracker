@@ -39,7 +39,7 @@ def service_config_path():
 
 
 def engine_path():
-    directory = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1] / "dist_service" / "WOACC Tracker"
+    directory = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2] / "dist_service" / "WOACC Tracker"
     path = directory / "WOACC Tracker Engine" / "WOACC Tracker Engine.exe"
     if not path.is_file():
         raise FileNotFoundError("WOACC Tracker Engine.exe missing. Install the complete service distribution.")
@@ -72,7 +72,11 @@ def run_service_action(action, config_path):
     kernel.GetExitCodeProcess.argtypes = [wt.HANDLE, ctypes.POINTER(wt.DWORD)]
     kernel.CloseHandle.argtypes = [wt.HANDLE]
     try:
-        kernel.WaitForSingleObject(info.hProcess, 0xFFFFFFFF)
+        wait = kernel.WaitForSingleObject(info.hProcess, 120000)
+        if wait == 0x102:
+            raise TimeoutError("Windows service command is still pending. Check service-control.log and the service status before retrying.")
+        if wait != 0:
+            raise ctypes.WinError(ctypes.get_last_error())
         code = wt.DWORD()
         if not kernel.GetExitCodeProcess(info.hProcess, ctypes.byref(code)):
             raise ctypes.WinError(ctypes.get_last_error())
