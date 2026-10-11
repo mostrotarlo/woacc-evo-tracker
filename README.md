@@ -1,10 +1,67 @@
-# WOACC EVO Tracker 🚀
+# WOACC EVO & ACC Tracker 15.1.0
 
-**WOACC EVO Tracker** is a local/community tracker for **Assetto Corsa EVO** dedicated server JSON results.
+![WOACC EVO & ACC Tracker](docs/assets/woacc-evo-acc-tracker-15.1.0.png)
 
-It imports EVO result files automatically, builds web leaderboards and session pages, provides diagnostic import logs, and can optionally send Discord notifications or expose a WOACC Bridge API for external collectors.
+## v15.1.0 Unified ACC/EVO and Windows service
+
+This Windows release supports ACC, EVO or both, automatic server discovery from
+ACCweb and EVO Web Server Manager, per-source live timing controls, and a separate
+Windows service engine. Manual additions detect the expected log location for
+both simulators and ask for a log when detection fails. Desktop tabs are colored.
+
+Extract the complete release archive before opening `WOACC Tracker.exe`. Keep
+both `_internal` directories and the `WOACC Tracker Engine` folder. The included
+multilingual PDF manual covers all settings, service installation, LAN access,
+public access with and without Caddy, Discord and the Bridge API.
+
+**WOACC Tracker** is a local/community tracker for Assetto Corsa EVO and Assetto Corsa Competizione dedicated servers.
+
+It imports result files automatically, builds separate web leaderboards and session pages for each simulator, provides diagnostic import logs, and can optionally send Discord notifications or expose an EVO-compatible WOACC Bridge API for external collectors.
 
 > Community-made project. Not official Kunos software.
+
+---
+
+## v15.0.5 ACC configured temperatures
+
+ACC sessions import `ambientTemp` and optional `trackTemp` from the server's `event.json`, next to its `results` folder. These are configured temperatures. Explicit result conditions take priority. Archived sessions can recover missing temperatures only when the configuration predates the session and matches its track. Values are stored with the session and shared through the Bridge API; missing track temperature and grip remain unavailable. Dry/wet status follows the result's `isWetSession`, independently of configured random rain.
+
+## v15.0.4 ACC data and opening view
+
+In the Windows settings, choose the initial EVO or ACC view when both simulators are enabled. Older ACC sessions keep missing air/track temperature and grip as unavailable; their existing `playerId` values remain available as Steam IDs. The tracker stores explicit `conditions` values from a result JSON when present, without modifying the original file. A newly generated standard ACC result is not guaranteed to contain temperatures or grip.
+
+## v15.0.3 Performance
+
+Unchanged result files are skipped during subsequent folder scans. Each imported session is committed in one database transaction instead of writing every lap separately. The web pages use indexed session lookups, and the server list reuses its live status data during rendering.
+
+## v15.0.1 Bridge API for both simulators
+
+The authenticated WOACC Bridge API can now share original ACC and EVO JSON files without changing their contents:
+
+```text
+GET /api/woacc/sessions             EVO only (legacy default)
+GET /api/woacc/sessions?sim=acc     ACC only
+GET /api/woacc/sessions?sim=all     Both simulators
+GET /api/woacc/session/<id>/original.json
+```
+
+Each index item includes `sim` (`evo` or `acc`). The existing `X-WOACC-API-Key` remains valid. The default stays EVO-only so older ACC JSON Monitor Plus installations do not accidentally interpret ACC results as EVO results. Update the monitor before switching it to `sim=all`.
+
+---
+
+## New in v15.0.0: EVO and ACC in one tracker
+
+- Choose EVO, ACC or Both in the desktop General tab. The web interface keeps the simulators separate via an EVO/ACC switch.
+- In the EVO tab, select the EVO Web Server Manager installation folder. Servers are discovered under `servers/<server>/`, with results in `result/` and live log in `serverConfig/Assetto Corsa EVO Server.txt`.
+- In the ACC tab, select the ACCweb installation folder. Servers are discovered under `config/<server>/`, with results in `results/` and the live log in `log/server.log`.
+- Manager sync adds and removes server sources as their folders change, while preserving per-server options such as monitoring and Discord settings. A temporarily unavailable manager folder does not erase its sources.
+- ACC archived sessions use the official `isValidForBest` lap flag and final race order from the ACC result JSON. `isWetSession` supplies the historical dry/wet indicator.
+- ACC live Practice/Qualifying timing is provisional. Race position is not shown live until a reliable position signal is verified; official race classification appears after the session JSON is imported.
+- ACCweb's current `event.json` can provide configured track, air and track temperature for live server status. It is not used to invent historical temperatures absent from result JSON.
+- The existing Bridge API defaults to EVO sessions for current external consumers; the existing configuration, key and database are reused on upgrade.
+- Repeated scans skip result files whose size and modification time have not changed, avoiding repeated hashing of large ACC archives.
+
+For a safe upgrade, back up `%APPDATA%\WOACC_Tracker\config.json` and `woacc_tracker.db` before replacing the running application. Keep the old executable as a rollback copy.
 
 ---
 
@@ -522,9 +579,11 @@ GET /api/woacc/sessions
 GET /api/woacc/session/<session_id>/original.json
 ```
 
-`/api/woacc/sessions` includes session metadata and, when available, a `conditions` object.
+`/api/woacc/ping` advertises `supported_sims`. `/api/woacc/sessions` defaults to EVO for older clients and accepts `?sim=evo`, `?sim=acc`, or `?sim=all`. Each item includes its `sim` and, when known, a `conditions` object.
 
-`/api/woacc/session/<session_id>/original.json` returns the original EVO result JSON unchanged.
+`/api/woacc/session/<session_id>/original.json` returns the original EVO or ACC result JSON unchanged. EVO air temperature, grip and wetness in the index come from the matching server log, not from the original result JSON. ACC results can supply `isWetSession`; air/track temperature and grip are not inferred when absent.
+
+The WOACC Unified Monitor copies available index conditions into its converted JSON as `conditions` with `__conditions_source`, while keeping the downloaded raw file unchanged. It preserves ACC `playerId` as `steamId`/`playerId` for drivers and laps. Existing converted files are not rewritten automatically.
 
 When served under `/tracker`:
 

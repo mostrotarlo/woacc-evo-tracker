@@ -5,7 +5,7 @@ import ipaddress
 import logging
 from woacc_tracker.core.importer import Importer
 
-from flask import Flask, abort, flash, jsonify, make_response, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, abort, flash, g, jsonify, make_response, redirect, render_template, request, send_file, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from woacc_tracker.core.database import Database
@@ -14,6 +14,7 @@ from woacc_tracker.core.utils import ms_to_time, format_gap
 from woacc_tracker.core.translations import available_languages, load_vocabulary, pick_language
 from woacc_tracker.core.config import save_config, DEFAULT_WOACC_API_KEY
 from woacc_tracker.core.server_log import is_live_leaderboard_enabled, read_live_server_leaderboard, read_live_servers_status
+from woacc_tracker.core.acc_live import read_acc_status, read_acc_leaderboard
 
 
 def normalize_base_path(value: str) -> str:
@@ -46,27 +47,50 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         __name__,
         template_folder="templates",
         static_folder="static",
-        static_url_path=f"{base_path}/static" if base_path else "/static"
+        static_url_path="/static"
     )
 
     app.secret_key = cfg.get("secret_key") or "woacc-tracker-dev-secret-change-me"
+    app.config["SESSION_COOKIE_PATH"] = "/"
     app.config["WOACC_CFG"] = cfg
     app.config["WOACC_DB"] = db
     app.config["APPLICATION_ROOT"] = base_path or "/"
+
+    def active_sim() -> str:
+        mode = cfg.get("tracker_mode") or "evo"
+        if mode in {"evo", "acc"}:
+            return mode
+        default_sim = cfg.get("default_sim") if cfg.get("default_sim") in {"evo", "acc"} else "evo"
+        if session.get("sim_default_at_selection") != default_sim:
+            session["sim_default_at_selection"] = default_sim
+            session["active_sim"] = default_sim
+        selected = session.get("active_sim")
+        return selected if selected in {"evo", "acc"} else default_sim
+
+    def live_status(include_details=False):
+        sim = active_sim()
+        if sim == "evo":
+            scoped = dict(cfg, sources=[dict(source, enabled=False) if (source.get("sim") or "evo") != "evo" else source
+                                        for source in cfg.get("sources") or []])
+            return read_live_servers_status(scoped, include_details=include_details)
+        items = []
+        for index, source in enumerate(cfg.get("sources") or []):
+            if source.get("sim") != "acc" or not source.get("enabled", True) or not is_live_leaderboard_enabled(source):
+                continue
+            item = read_acc_status(source, include_details=include_details)
+            item["source_index"] = index
+            if item["has_log"]:
+                items.append(item)
+        online = [item for item in items if item["is_online"]]
+        return {"items": items, "online": online, "has_logs": bool(items),
+                "active_count": len(online), "players_online": sum(item["players_online"] for item in online)}
 
     # WOACC Bridge API v13:
     # enabled by default, protected by the shared ACC_JSON_Monitor_Plus 2 key.
     # Users can opt out from the desktop app by disabling woacc_api_enabled.
     if "woacc_api_enabled" not in cfg:
         cfg["woacc_api_enabled"] = True
-    # v13 definitive: shared key expected by ACC_JSON_Monitor_Plus 2.
-    # Existing custom/old keys are overwritten so every tracker speaks the same bridge protocol.
-    if cfg.get("woacc_api_key") != DEFAULT_WOACC_API_KEY:
-        cfg["woacc_api_key"] = DEFAULT_WOACC_API_KEY
-        try:
-            save_config(cfg)
-        except Exception:
-            pass
+    cfg["woacc_api_key"] = (cfg.get("woacc_api_key") or DEFAULT_WOACC_API_KEY).strip()
     # Supporto reverse proxy e sottopercorso Caddy, es. /tracker.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
@@ -82,7 +106,9 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
     def inject_theme_and_i18n():
         lang = pick_language(request, cfg)
         vocab = load_vocabulary(lang)
-        live_servers = read_live_servers_status(cfg)
+        live_servers = getattr(g, "live_servers", None)
+        if live_servers is None:
+            live_servers = live_status()
 
         def t(key: str, default: str | None = None) -> str:
             return str(vocab.get(key, default if default is not None else key))
@@ -112,15 +138,16 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             parts = []
             precipitation = get("precipitation")
             wetness = get("initial_global_wetness")
+            weather_type = str(get("weather_type") or "").strip().upper()
             try:
                 is_rain = precipitation is not None and float(precipitation) > 0
             except (TypeError, ValueError):
                 is_rain = False
             try:
-                is_wet = is_rain or (wetness is not None and float(wetness) > 0)
+                is_wet = weather_type in {"RAIN", "WET", "WETTRACK"} or is_rain or (wetness is not None and float(wetness) > 0)
             except (TypeError, ValueError):
-                is_wet = is_rain
-            parts.append("WET" if is_wet else "DRY")
+                is_wet = weather_type in {"RAIN", "WET", "WETTRACK"} or is_rain
+            parts.append(t("condition_wet", "Bagnato") if is_wet else t("condition_dry", "Asciutto"))
             if is_rain:
                 try:
                     parts.append(f"RAIN {float(precipitation):.2f}")
@@ -130,7 +157,13 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             temp = get("ambient_temperature_c")
             if temp is not None:
                 try:
-                    parts.append(f"{float(temp):.1f}C")
+                    parts.append(f"{t('air_temp', 'Air')} {float(temp):.1f} °C")
+                except (TypeError, ValueError):
+                    pass
+            track_temp = get("track_temperature_c")
+            if track_temp is not None:
+                try:
+                    parts.append(f"{t('track_temp', 'Track')} {float(track_temp):.1f} °C")
                 except (TypeError, ValueError):
                     pass
 
@@ -142,12 +175,6 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                     pass
             elif get("initial_grip_label"):
                 parts.append(str(get("initial_grip_label")))
-
-            if wetness is not None:
-                try:
-                    parts.append(f"WET {float(wetness):.2f}")
-                except (TypeError, ValueError):
-                    pass
 
             wind = get("wind_speed_m_s")
             if wind is not None:
@@ -176,7 +203,16 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             "conditions_label": conditions_label,
             "base_path": public_base_path,
             "live_servers": live_servers,
+            "active_sim": active_sim(),
         }
+
+    @app.route("/select-sim/<sim>")
+    def select_sim(sim: str):
+        if sim not in {"evo", "acc"} or cfg.get("tracker_mode") not in {"both", sim}:
+            abort(404)
+        session["active_sim"] = sim
+        session["sim_default_at_selection"] = cfg.get("default_sim") if cfg.get("default_sim") in {"evo", "acc"} else "evo"
+        return redirect(url_for("home"))
 
     def _safe_local_redirect_target(target: str | None) -> str:
         """Redirect solo verso URL locali e compatibili con il sottopercorso Caddy."""
@@ -281,27 +317,29 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
     @app.route("/")
     @login_required
     def home():
+        sim = active_sim()
         stats = db.one(
             """SELECT
-                (SELECT COUNT(*) FROM servers) AS servers,
-                (SELECT COUNT(*) FROM sessions) AS sessions,
-                (SELECT COUNT(DISTINCT track_name || '::' || COALESCE(track_layout,'')) FROM servers) AS tracks,
-                (SELECT MAX(session_datetime) FROM sessions) AS last_session
-            """
+                (SELECT COUNT(*) FROM servers WHERE sim=?) AS servers,
+                (SELECT COUNT(*) FROM sessions WHERE sim=?) AS sessions,
+                (SELECT COUNT(DISTINCT track_name || '::' || COALESCE(track_layout,'')) FROM servers WHERE sim=?) AS tracks,
+                (SELECT MAX(session_datetime) FROM sessions WHERE sim=?) AS last_session
+            """, (sim, sim, sim, sim)
         )
         servers = db.query(
             """SELECT s.*, COUNT(se.id) AS entries_count, COUNT(DISTINCT se.driver_id) AS drivers_count, COUNT(sess.id) AS sessions_count
                FROM servers s
                LEFT JOIN sessions sess ON sess.server_id=s.id
                LEFT JOIN session_entries se ON se.session_id=sess.id
+               WHERE s.sim=?
                GROUP BY s.id
                ORDER BY s.last_session_at DESC
-               LIMIT 8"""
+               LIMIT 8""", (sim,)
         )
         sessions = db.query(
             """SELECT sess.*, srv.server_name, srv.track_name, srv.track_layout
                FROM sessions sess JOIN servers srv ON srv.id=sess.server_id
-               ORDER BY sess.session_datetime DESC LIMIT 12"""
+               WHERE sess.sim=? ORDER BY sess.session_datetime DESC LIMIT 12""", (sim,)
         )
         return render_template("home.html", cfg=cfg, stats=stats, servers=servers, sessions=sessions)
 
@@ -316,8 +354,10 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         direction_sql = "ASC" if direction == "asc" else "DESC"
         params = []
         where = ""
+        where = "WHERE s.sim=?"
+        params.append(active_sim())
         if q:
-            where = "WHERE lower(s.server_name) LIKE ? OR lower(s.track_name) LIKE ? OR lower(COALESCE(s.track_layout,'')) LIKE ?"
+            where += " AND (lower(s.server_name) LIKE ? OR lower(s.track_name) LIKE ? OR lower(COALESCE(s.track_layout,'')) LIKE ?)"
             params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
         rows = db.query(
             f"""SELECT s.*, COUNT(sess.id) AS sessions_count
@@ -328,14 +368,15 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 ORDER BY {order} {direction_sql}""",
             tuple(params),
         )
-        live_status = read_live_servers_status(cfg, include_details=True)
-        return render_template("servers.html", cfg=cfg, servers=rows, live_status=live_status, q=q, sort=sort, direction=direction)
+        status_page = live_status(include_details=True)
+        g.live_servers = status_page
+        return render_template("servers.html", cfg=cfg, servers=rows, live_status=status_page, q=q, sort=sort, direction=direction)
 
     @app.route("/server/<int:server_id>")
     @login_required
     def server_detail(server_id: int):
         server = db.one("SELECT * FROM servers WHERE id=?", (server_id,))
-        if not server:
+        if not server or server["sim"] != active_sim():
             return "Server non trovato", 404
         bests = db.query(
             """WITH filtered AS (
@@ -430,7 +471,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             abort(404)
         if not is_live_leaderboard_enabled(src):
             abort(404)
-        data = read_live_server_leaderboard(src)
+        data = read_acc_leaderboard(src) if src.get("sim") == "acc" else read_live_server_leaderboard(src)
         return render_template("live_leaderboard.html", cfg=cfg, source=src, source_index=source_index, data=data)
 
     @app.route("/api/live/leaderboard/<int:source_index>")
@@ -442,16 +483,16 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         src = sources[source_index]
         if not src.get("enabled", True) or not is_live_leaderboard_enabled(src):
             abort(404)
-        return jsonify(read_live_server_leaderboard(src))
+        return jsonify(read_acc_leaderboard(src) if src.get("sim") == "acc" else read_live_server_leaderboard(src))
 
     @app.route("/api/live/status")
     @login_required
     def api_live_status():
-        live_status = read_live_servers_status(cfg)
+        status = live_status()
         return jsonify({
-            "has_logs": live_status.get("has_logs", False),
-            "active_count": live_status.get("active_count", 0),
-            "players_online": live_status.get("players_online", 0),
+            "has_logs": status.get("has_logs", False),
+            "active_count": status.get("active_count", 0),
+            "players_online": status.get("players_online", 0),
         })
     
     @app.route("/sessions")
@@ -461,7 +502,8 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         stype = request.args.get("type") or ""
         condition = (request.args.get("condition") or "").strip().lower()
         params = []
-        clauses = []
+        clauses = ["sess.sim=?"]
+        params.append(active_sim())
         if q:
             clauses.append("(lower(srv.server_name) LIKE ? OR lower(srv.track_name) LIKE ? OR lower(COALESCE(srv.track_layout,'')) LIKE ?)")
             params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
@@ -479,7 +521,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 ORDER BY sess.session_datetime DESC""",
             tuple(params),
         )
-        types = db.query("SELECT DISTINCT session_type FROM sessions ORDER BY session_type")
+        types = db.query("SELECT DISTINCT session_type FROM sessions WHERE sim=? ORDER BY session_type", (active_sim(),))
         return render_template("sessions.html", cfg=cfg, sessions=rows, q=q, stype=stype, condition=condition, types=types)
 
     @app.route("/session/<int:session_id>")
@@ -490,7 +532,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                FROM sessions sess JOIN servers srv ON srv.id=sess.server_id WHERE sess.id=?""",
             (session_id,),
         )
-        if not sess:
+        if not sess or sess["sim"] != active_sim():
             return "Sessione non trovata", 404
         entries = db.query(
             """SELECT se.*, d.display_name, d.steam_id, d.nation, COALESCE(se.driver_category, d.driver_category, '') AS driver_category
@@ -525,8 +567,8 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         stype = (request.args.get("type") or "").strip()
         condition = (request.args.get("condition") or "").strip().lower()
 
-        track_clauses = []
-        track_params = []
+        track_clauses = ["srv.sim=?"]
+        track_params = [active_sim()]
         if server_q:
             track_clauses.append("lower(srv.server_name) LIKE ?")
             track_params.append(f"%{server_q.lower()}%")
@@ -541,8 +583,8 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             tuple(track_params),
         )
 
-        clauses = ["se.best_lap_ms IS NOT NULL"]
-        params = []
+        clauses = ["se.best_lap_ms IS NOT NULL", "srv.sim=?"]
+        params = [active_sim()]
         if server_q:
             clauses.append("lower(srv.server_name) LIKE ?")
             params.append(f"%{server_q.lower()}%")
@@ -632,7 +674,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 ORDER BY best_rows.best_lap_ms ASC, best_rows.display_name ASC""",
             tuple(params),
         )
-        types = db.query("SELECT DISTINCT session_type FROM sessions ORDER BY session_type")
+        types = db.query("SELECT DISTINCT session_type FROM sessions WHERE sim=? ORDER BY session_type", (active_sim(),))
         return render_template(
             "leaderboard.html",
             cfg=cfg,
@@ -648,6 +690,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
     @app.route("/records")
     @login_required
     def records():
+        sim = active_sim()
         selected_track = (request.args.get("track") or "").strip()
         selected_layout = (request.args.get("layout") or "").strip()
         selected_car = (request.args.get("car") or "").strip()
@@ -666,12 +709,12 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             JOIN sessions sess ON sess.server_id = srv.id
             JOIN session_entries se ON se.session_id = sess.id
             JOIN laps l ON l.entry_id = se.id
-            WHERE l.is_valid = 1
+            WHERE l.is_valid = 1 AND srv.sim = ?
               AND srv.track_name IS NOT NULL
               AND srv.track_name <> ''
             GROUP BY srv.track_name, COALESCE(srv.track_layout, '')
             ORDER BY srv.track_name ASC, COALESCE(srv.track_layout, '') ASC
-            """
+            """, (sim,)
         )
 
         cars = []
@@ -692,12 +735,12 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 JOIN sessions sess ON sess.server_id = srv.id
                 JOIN session_entries se ON se.session_id = sess.id
                 JOIN laps l ON l.entry_id = se.id
-                WHERE l.is_valid = 1
+                WHERE l.is_valid = 1 AND srv.sim = ?
                   AND srv.track_name = ?
                   AND COALESCE(srv.track_layout, '') = ?
                 GROUP BY srv.track_name, COALESCE(srv.track_layout, '')
                 """,
-                (selected_track, selected_layout),
+                (sim, selected_track, selected_layout),
             )
 
             cars = db.query(
@@ -707,7 +750,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 JOIN sessions sess ON sess.server_id = srv.id
                 JOIN session_entries se ON se.session_id = sess.id
                 JOIN laps l ON l.entry_id = se.id
-                WHERE l.is_valid = 1
+                WHERE l.is_valid = 1 AND srv.sim = ?
                   AND srv.track_name = ?
                   AND COALESCE(srv.track_layout, '') = ?
                   AND se.car_name IS NOT NULL
@@ -715,10 +758,10 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 GROUP BY se.car_name
                 ORDER BY se.car_name ASC
                 """,
-                (selected_track, selected_layout),
+                (sim, selected_track, selected_layout),
             )
 
-            params = [selected_track, selected_layout]
+            params = [sim, selected_track, selected_layout]
             car_filter = ""
             if selected_car:
                 car_filter = "AND se.car_name = ?"
@@ -771,7 +814,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                     JOIN session_entries se ON se.session_id = sess.id
                     JOIN drivers d ON d.id = se.driver_id
                     JOIN laps l ON l.entry_id = se.id
-                    WHERE l.is_valid = 1
+                    WHERE l.is_valid = 1 AND srv.sim = ?
                       AND srv.track_name = ?
                       AND COALESCE(srv.track_layout, '') = ?
                       {car_filter}
@@ -805,8 +848,8 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
     def licenses_page():
         q = (request.args.get("q") or "").strip().lower()
         mode = (request.args.get("mode") or "ranking").strip().lower()
-        clauses = []
-        params = []
+        clauses = ["sess.sim=?"]
+        params = [active_sim()]
         if q:
             clauses.append("lower(driver_name) LIKE ?")
             params.append(f"%{q}%")
@@ -987,6 +1030,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
             "community_name": cfg.get("community_name", "WOACC Tracker"),
             "base_path": base_path,
             "api_version": 1,
+            "supported_sims": ["evo", "acc"],
         })
 
     @app.route("/api/woacc/sessions")
@@ -1000,8 +1044,12 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         - ?status=all           include anche skipped/error
         - ?after=ISO_DATE       filtra per data importazione
         - ?limit=500            limite risultati, max 5000
+        - ?sim=evo|acc|all      default evo per i client esistenti
         """
         status = (request.args.get("status") or "imported").strip().lower()
+        sim = (request.args.get("sim") or "evo").strip().lower()
+        if sim not in {"evo", "acc", "all"}:
+            return jsonify({"ok": False, "error": "Invalid sim filter"}), 400
         after = (request.args.get("after") or "").strip()
         try:
             limit = int(request.args.get("limit") or 1000)
@@ -1011,6 +1059,9 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
 
         clauses = []
         params = []
+        if sim != "all":
+            clauses.append("COALESCE(src.sim, 'evo')=?")
+            params.append(sim)
 
         if status != "all":
             clauses.append("f.status=?")
@@ -1033,6 +1084,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                     f.session_id,
                     src.id AS source_id,
                     src.name AS source_name,
+                    COALESCE(src.sim, 'evo') AS sim,
                     sess.session_name,
                     sess.session_type,
                     sess.session_datetime,
@@ -1041,6 +1093,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                     sess.drivers_count,
                     sess.weather_log_at,
                     sess.ambient_temperature_c,
+                    sess.track_temperature_c,
                     sess.weather_type,
                     sess.sky_coverage,
                     sess.gloominess,
@@ -1087,6 +1140,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 "imported_at": r["imported_at"],
                 "source_id": r["source_id"],
                 "source_name": r["source_name"],
+                "sim": r["sim"],
                 "server_name": r["server_name"],
                 "track_name": r["track_name"],
                 "track_layout": r["track_layout"],
@@ -1099,6 +1153,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
                 "conditions": {
                     "weather_log_at": r["weather_log_at"],
                     "ambient_temperature_c": r["ambient_temperature_c"],
+                    "track_temperature_c": r["track_temperature_c"],
                     "weather_type": r["weather_type"],
                     "sky_coverage": r["sky_coverage"],
                     "gloominess": r["gloominess"],
@@ -1122,6 +1177,7 @@ def create_app(db: Database, cfg: Dict[str, Any]) -> Flask:
         return jsonify({
             "ok": True,
             "api_version": 1,
+            "sim": sim,
             "count": len(items),
             "items": items,
         })

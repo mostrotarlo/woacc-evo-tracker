@@ -1,5 +1,9 @@
 {
   "community_name": "WOACC Tracker",
+  "tracker_mode": "both",
+  "default_sim": "evo",
+  "evo_manager_path": "",
+  "accweb_path": "",
   "host_label": "",
   "port": 5055,
   "remote_access": true,
@@ -20,6 +24,7 @@
   "sources": [
     {
       "name": "My EVO Server",
+      "sim": "evo",
       "path": "C:/Path/To/Assetto Corsa EVO Dedicated Server/result",
       "enabled": true,
       "server_log_path": "C:/Path/To/Assetto Corsa EVO Dedicated Server/serverConfig/Assetto Corsa EVO Server.txt",
@@ -49,6 +54,17 @@
           "time_ms": 104000
         }
       ]
+    },
+    {
+      "name": "My ACC Server",
+      "sim": "acc",
+      "path": "C:/Path/To/ACCweb/config/SERVER_ID/results",
+      "enabled": true,
+      "server_log_path": "C:/Path/To/ACCweb/config/SERVER_ID/log/server.log",
+      "live_leaderboard_enabled": false,
+      "announce_records": false,
+      "session_notify_enabled": false,
+      "license_enabled": false
     }
   ],
   "theme": {

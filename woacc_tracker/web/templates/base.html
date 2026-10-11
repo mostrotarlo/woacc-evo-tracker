@@ -19,11 +19,17 @@
       --font-size-base: {{ theme.font_size|default(16) }}px;
     }
   </style>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=13_4_live7">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=15_1_0">
 </head>
 <body>
 <header class="topbar">
   <a class="brand" href="{{ url_for('home') }}"><span>WOACC</span> Tracker</a>
+  {% if cfg.tracker_mode == 'both' %}
+  <div class="sim-switch" aria-label="Simulator">
+    <a href="{{ url_for('select_sim', sim='evo') }}" class="{{ 'active' if active_sim == 'evo' else '' }}">EVO</a>
+    <a href="{{ url_for('select_sim', sim='acc') }}" class="{{ 'active' if active_sim == 'acc' else '' }}">ACC</a>
+  </div>
+  {% else %}<span class="sim-label">{{ active_sim|upper }}</span>{% endif %}
   <nav>
     <a href="{{ url_for('home') }}">{{ t('home') }}</a>
     <a href="{{ url_for('servers') }}">{{ t('servers') }}</a>
@@ -50,7 +56,7 @@
 <main class="container">
   {% block content %}{% endblock %}
 </main>
-<script src="{{ url_for('static', filename='app.js') }}?v=13_4_live7"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=15_1_0"></script>
 <script>
   document.querySelectorAll('[data-language-select]').forEach((select) => {
     select.addEventListener('change', () => { window.location.href = select.value; });

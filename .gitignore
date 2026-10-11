@@ -9,6 +9,20 @@ env/
 # Build artifacts
 build/
 dist/
+build_v15/
+dist_v15/
+build_v15_0_1/
+dist_v15_0_1/
+dist_service/
+dist_service_engine/
+build_service_desktop/
+build_service_engine/
+release/staging/
+tmp/pdfs/
+backups/
+integration/converter_smoke_output/
+integration/**/*.original.py
+release/verification_*.json
 *.spec
 *.exe
 *.zip

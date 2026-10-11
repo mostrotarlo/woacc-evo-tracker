@@ -4,6 +4,18 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 
+def json_file_encoding(path: Path) -> str:
+    with Path(path).open("rb") as stream:
+        header = stream.read(4)
+    if header.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return "utf-16"
+    if len(header) >= 2 and header[1] == 0:
+        return "utf-16-le"
+    if len(header) >= 2 and header[0] == 0:
+        return "utf-16-be"
+    return "utf-8-sig"
+
+
 def key_to_str(k: Any) -> str:
     if isinstance(k, dict):
         return f"{k.get('a','')}:{k.get('b','')}"

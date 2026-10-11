@@ -1,5 +1,7 @@
 import json
 import sqlite3
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -9,13 +11,19 @@ from .utils import make_server_key
 class Database:
     def __init__(self, path: str):
         self.path = str(path)
+        self._local = threading.local()
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
 
-    def connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def connect(self):
         conn = sqlite3.connect(self.path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def init_schema(self) -> None:
         with self.connect() as db:
@@ -40,6 +48,7 @@ class Database:
         add("laps", "invalid_reason", "invalid_reason TEXT")
         add("sessions", "weather_log_at", "weather_log_at TEXT")
         add("sessions", "ambient_temperature_c", "ambient_temperature_c REAL")
+        add("sessions", "track_temperature_c", "track_temperature_c REAL")
         add("sessions", "weather_type", "weather_type TEXT")
         add("sessions", "sky_coverage", "sky_coverage REAL")
         add("sessions", "gloominess", "gloominess REAL")
@@ -64,6 +73,15 @@ class Database:
         add("import_sources", "weekly_recap_enabled", "weekly_recap_enabled INTEGER NOT NULL DEFAULT 0")
         add("import_sources", "weekly_recap_started_at", "weekly_recap_started_at TEXT")
         add("import_sources", "server_log_path", "server_log_path TEXT")
+        add("import_sources", "sim", "sim TEXT NOT NULL DEFAULT 'evo'")
+        add("import_files", "file_size", "file_size INTEGER")
+        add("import_files", "file_mtime_ns", "file_mtime_ns INTEGER")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_import_files_path_source ON import_files(file_path, source_id)")
+        add("servers", "sim", "sim TEXT NOT NULL DEFAULT 'evo'")
+        add("sessions", "sim", "sim TEXT NOT NULL DEFAULT 'evo'")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_server_id ON sessions(server_id)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_sim_datetime ON sessions(sim, session_datetime DESC)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_session_entries_session_id ON session_entries(session_id)")
 
         # Discord/session/license settings (v13.2 social)
         add("import_sources", "session_notify_enabled", "session_notify_enabled INTEGER NOT NULL DEFAULT 0")
@@ -147,18 +165,38 @@ class Database:
         )
 
     def execute(self, sql: str, params: Tuple = ()) -> sqlite3.Cursor:
+        transaction = getattr(self._local, "transaction", None)
+        if transaction is not None:
+            return transaction.execute(sql, params)
         with self.connect() as db:
             cur = db.execute(sql, params)
             db.commit()
             return cur
 
     def query(self, sql: str, params: Tuple = ()) -> List[sqlite3.Row]:
+        transaction = getattr(self._local, "transaction", None)
+        if transaction is not None:
+            return transaction.execute(sql, params).fetchall()
         with self.connect() as db:
             return db.execute(sql, params).fetchall()
 
     def one(self, sql: str, params: Tuple = ()) -> Optional[sqlite3.Row]:
+        transaction = getattr(self._local, "transaction", None)
+        if transaction is not None:
+            return transaction.execute(sql, params).fetchone()
         with self.connect() as db:
             return db.execute(sql, params).fetchone()
+
+    @contextmanager
+    def transaction(self):
+        if getattr(self._local, "transaction", None) is not None:
+            raise RuntimeError("Nested database transactions are not supported")
+        with self.connect() as db:
+            self._local.transaction = db
+            try:
+                yield
+            finally:
+                del self._local.transaction
 
 
 SCHEMA = r"""
@@ -228,6 +266,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     best_lap_ms INTEGER,
     weather_log_at TEXT,
     ambient_temperature_c REAL,
+    track_temperature_c REAL,
     weather_type TEXT,
     sky_coverage REAL,
     gloominess REAL,

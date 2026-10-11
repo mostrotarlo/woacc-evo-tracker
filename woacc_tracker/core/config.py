@@ -3,8 +3,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-APP_DIR = Path(os.getenv("APPDATA", Path.home())) / "WOACC_Tracker"
-CONFIG_PATH = APP_DIR / "config.json"
+CONFIG_PATH = Path(os.environ["WOACC_CONFIG_PATH"]).resolve() if os.getenv("WOACC_CONFIG_PATH") else Path(os.getenv("APPDATA", Path.home())) / "WOACC_Tracker" / "config.json"
+APP_DIR = CONFIG_PATH.parent
 DB_PATH = APP_DIR / "woacc_tracker.db"
 
 # Shared bridge key used by ACC_JSON_Monitor_Plus 2.
@@ -35,6 +35,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "scan_interval_sec": 10,
     "language": "it",
     "database_path": str(DB_PATH),
+    "tracker_mode": "evo",
+    "default_sim": "evo",
+    "evo_manager_path": "",
+    "accweb_path": "",
     "sources": [],
     "theme": {
         "font_family": "Segoe UI, Arial, sans-serif",
@@ -78,15 +82,25 @@ def load_config() -> Dict[str, Any]:
         data = {}
     cfg = DEFAULT_CONFIG.copy()
     cfg.update(data)
+    cfg["sources"] = [dict(source, sim=source.get("sim") or "evo") for source in (cfg.get("sources") or [])]
+    if cfg.get("tracker_mode") not in {"evo", "acc", "both"}:
+        cfg["tracker_mode"] = "evo"
+    if cfg.get("default_sim") not in {"evo", "acc"}:
+        cfg["default_sim"] = "evo"
     if "woacc_api_enabled" not in cfg:
         cfg["woacc_api_enabled"] = True
-    # v13 definitive: ACC_JSON_Monitor_Plus 2 uses this shared bridge key.
-    cfg["woacc_api_key"] = DEFAULT_WOACC_API_KEY
+    cfg["woacc_api_key"] = (cfg.get("woacc_api_key") or DEFAULT_WOACC_API_KEY).strip()
     return _merge_theme(cfg)
 
 
 def save_config(cfg: Dict[str, Any]) -> None:
     ensure_app_dir()
     _merge_theme(cfg)
-    with CONFIG_PATH.open("w", encoding="utf-8") as f:
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=APP_DIR, delete=False) as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
+        temporary = Path(f.name)
+    try:
+        os.replace(temporary, CONFIG_PATH)
+    finally:
+        temporary.unlink(missing_ok=True)

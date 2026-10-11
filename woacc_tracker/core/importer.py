@@ -5,6 +5,7 @@ import json
 
 from .database import Database
 from .parser import parse_evo_results, file_sha256
+from .acc_parser import parse_acc_results, read_acc_result_weather
 from .records_discord import post_discord_record, post_discord_weekly_recap
 from .discord_notifications import post_session_notification
 from .licenses import process_license_notifications
@@ -21,6 +22,7 @@ class Importer:
         self.log = log
         self.db.init_schema()
         self.pending_record_candidates = {}
+        self._folder_stat_cache: Dict[int, Dict[str, tuple[int, int]]] = {}
 
     def _notification_language(self) -> str:
         try:
@@ -43,6 +45,7 @@ class Importer:
         weekly_recap_enabled = 1 if source_cfg.get("weekly_recap_enabled") else 0
         weekly_recap_started_at = source_cfg.get("weekly_recap_started_at") or None
         server_log_path = (source_cfg.get("server_log_path") or "").strip()
+        sim = source_cfg.get("sim") or "evo"
 
         session_notify_enabled = 1 if source_cfg.get("session_notify_enabled") else 0
         session_notify_webhook_url = (source_cfg.get("session_notify_webhook_url") or "").strip()
@@ -58,7 +61,7 @@ class Importer:
         if row:
             self.db.execute(
                 """UPDATE import_sources
-                   SET name=?,
+                   SET name=?, sim=?,
                        enabled=1,
                        last_scan_at=?,
                        announce_records=?,
@@ -79,6 +82,7 @@ class Importer:
                    WHERE id=?""",
                 (
                     name,
+                    sim,
                     now,
                     announce_records,
                     announce_name,
@@ -103,6 +107,7 @@ class Importer:
         cur = self.db.execute(
             """INSERT INTO import_sources(
                 name,
+                sim,
                 path,
                 enabled,
                 last_scan_at,
@@ -122,9 +127,10 @@ class Importer:
                 license_levels_json,
                 license_started_at
             )
-            VALUES(?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            VALUES(?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 name,
+                sim,
                 str(folder),
                 now,
                 announce_records,
@@ -154,10 +160,30 @@ class Importer:
             return stats
 
         source_id = self.ensure_source(folder, source_name or folder.name, source_cfg)
+        previous_stats = self._folder_stat_cache.get(source_id, {})
+        current_stats: Dict[str, tuple[int, int]] = {}
 
+        sim = (source_cfg or {}).get("sim") or "evo"
         for path in sorted(folder.glob("*.json")):
+            if sim == "acc" and not path.stem.upper().endswith(("_FP", "_P", "_Q", "_R")):
+                continue
+            if sim == "evo" and not path.name.startswith("results_"):
+                continue
             stats["found"] += 1
+            try:
+                file_stat = path.stat()
+                signature = (file_stat.st_size, file_stat.st_mtime_ns)
+            except OSError:
+                signature = None
+            path_key = str(path)
+            if signature is not None and previous_stats.get(path_key) == signature:
+                current_stats[path_key] = signature
+                stats["skipped"] += 1
+                continue
             result = self.import_file(path, source_id)
+
+            if result != "error" and signature is not None:
+                current_stats[path_key] = signature
 
             if result == "imported":
                 stats["imported"] += 1
@@ -165,6 +191,8 @@ class Importer:
                 stats["errors"] += 1
             else:
                 stats["skipped"] += 1
+
+        self._folder_stat_cache[source_id] = current_stats
 
         self.db.execute(
             "UPDATE import_sources SET last_scan_at=? WHERE id=?",
@@ -176,31 +204,61 @@ class Importer:
     def import_file(self, path: Path, source_id: Optional[int] = None) -> str:
         path = Path(path)
         now = datetime.now().isoformat(timespec="seconds")
+        existing = None
+        fhash = None
 
         try:
+            stat = path.stat()
+            previous = self.db.one(
+                """SELECT status, session_id FROM import_files
+                   WHERE file_path=? AND source_id=? AND file_size=? AND file_mtime_ns=?
+                   ORDER BY id DESC LIMIT 1""",
+                (str(path), source_id, stat.st_size, stat.st_mtime_ns),
+            )
+            if previous and previous["status"] != "error":
+                self._refresh_acc_result_weather(source_id, previous["session_id"], path)
+                return "skipped"
             fhash = file_sha256(path)
 
             existing = self.db.one("SELECT status, source_id, session_id FROM import_files WHERE file_hash=?", (fhash,))
-            if existing:
+            if existing and existing["status"] != "error":
                 self._refresh_session_datetime(existing["session_id"], path)
-                self._refresh_session_weather(source_id or existing["source_id"], existing["session_id"])
-                return "skipped"
-
-            parsed = parse_evo_results(path)
-
-            if int(parsed.get("laps_total") or 0) <= 0:
+                source = self.db.one("SELECT sim FROM import_sources WHERE id=?", (source_id or existing["source_id"],))
+                if source and source["sim"] == "acc":
+                    self._refresh_acc_result_weather(source_id or existing["source_id"], existing["session_id"], path)
+                else:
+                    self._refresh_session_weather(source_id or existing["source_id"], existing["session_id"])
                 self.db.execute(
-                    "INSERT OR IGNORE INTO import_files(file_path,file_hash,source_id,status,reason,imported_at) VALUES(?,?,?,?,?,?)",
-                    (str(path), fhash, source_id, "skipped", "Sessione senza giri", now),
+                    "UPDATE import_files SET file_size=?, file_mtime_ns=? WHERE file_hash=?",
+                    (stat.st_size, stat.st_mtime_ns, fhash),
                 )
                 return "skipped"
 
-            session_id = self._save_parsed(parsed, source_id)
+            source = self.db.one("SELECT sim FROM import_sources WHERE id=?", (source_id,)) if source_id else None
+            parsed = parse_acc_results(path) if source and source["sim"] == "acc" else parse_evo_results(path)
 
-            self.db.execute(
-                "INSERT OR IGNORE INTO import_files(file_path,file_hash,source_id,status,reason,imported_at,session_id) VALUES(?,?,?,?,?,?,?)",
-                (str(path), fhash, source_id, "imported", "", now, session_id),
-            )
+            if int(parsed.get("laps_total") or 0) <= 0:
+                if existing:
+                    self.db.execute("UPDATE import_files SET source_id=?, status='skipped', reason=?, imported_at=?, file_size=?, file_mtime_ns=? WHERE file_hash=?",
+                                    (source_id, "Sessione senza giri", now, stat.st_size, stat.st_mtime_ns, fhash))
+                else:
+                    self.db.execute(
+                        "INSERT OR IGNORE INTO import_files(file_path,file_hash,source_id,status,reason,imported_at,file_size,file_mtime_ns) VALUES(?,?,?,?,?,?,?,?)",
+                        (str(path), fhash, source_id, "skipped", "Sessione senza giri", now, stat.st_size, stat.st_mtime_ns),
+                    )
+                return "skipped"
+
+            with self.db.transaction():
+                session_id = self._save_parsed(parsed, source_id)
+
+                if existing:
+                    self.db.execute("UPDATE import_files SET source_id=?, status='imported', reason='', imported_at=?, session_id=?, file_size=?, file_mtime_ns=? WHERE file_hash=?",
+                                    (source_id, now, session_id, stat.st_size, stat.st_mtime_ns, fhash))
+                else:
+                    self.db.execute(
+                        "INSERT OR IGNORE INTO import_files(file_path,file_hash,source_id,status,reason,imported_at,session_id,file_size,file_mtime_ns) VALUES(?,?,?,?,?,?,?,?,?)",
+                        (str(path), fhash, source_id, "imported", "", now, session_id, stat.st_size, stat.st_mtime_ns),
+                    )
 
             self._check_and_announce_records(source_id, parsed, session_id)
             self._check_and_announce_session(source_id, parsed, session_id)
@@ -209,17 +267,53 @@ class Importer:
             return "imported"
 
         except Exception as exc:
-            try:
-                fhash = file_sha256(path)
-            except Exception:
-                fhash = f"error:{path}:{now}"
-
-            self.db.execute(
-                "INSERT OR IGNORE INTO import_files(file_path,file_hash,source_id,status,reason,imported_at) VALUES(?,?,?,?,?,?)",
-                (str(path), fhash, source_id, "error", traceback.format_exc(), now),
-            )
+            if fhash is None:
+                try:
+                    fhash = file_sha256(path)
+                except Exception:
+                    fhash = f"error:{path}:{now}"
+            if existing:
+                self.db.execute("UPDATE import_files SET reason=?, imported_at=? WHERE file_hash=?",
+                                (traceback.format_exc(), now, fhash))
+            else:
+                self.db.execute(
+                    "INSERT OR IGNORE INTO import_files(file_path,file_hash,source_id,status,reason,imported_at) VALUES(?,?,?,?,?,?)",
+                    (str(path), fhash, source_id, "error", traceback.format_exc(), now),
+                )
 
             return "error"
+
+    def _refresh_acc_result_weather(self, source_id: Optional[int], session_id: Optional[int], path: Path) -> None:
+        if not source_id or not session_id:
+            return
+        session = self.db.one(
+            "SELECT precipitation, weather_type, initial_global_wetness, ambient_temperature_c, track_temperature_c FROM sessions WHERE id=? AND sim='acc'",
+            (session_id,),
+        )
+        if not session:
+            return
+        weather = read_acc_result_weather(path)
+        precipitation = weather.get("precipitation")
+        wetness = weather.get("initial_global_wetness")
+        weather_type = weather.get("weather_type") or ""
+        air = weather.get("ambient_temperature_c")
+        track = weather.get("track_temperature_c")
+        if precipitation is None and wetness is None and not weather_type and air is None and track is None:
+            return
+        current = tuple(session[key] for key in ("precipitation", "weather_type", "initial_global_wetness",
+                                                 "ambient_temperature_c", "track_temperature_c"))
+        updated = (precipitation, weather_type, wetness,
+                   session["ambient_temperature_c"] if session["ambient_temperature_c"] is not None else air,
+                   session["track_temperature_c"] if session["track_temperature_c"] is not None else track)
+        if updated == current:
+            return
+        self.db.execute(
+            """UPDATE sessions SET precipitation=?, weather_type=?, initial_global_wetness=?,
+               ambient_temperature_c=COALESCE(ambient_temperature_c, ?),
+               track_temperature_c=COALESCE(track_temperature_c, ?)
+               WHERE id=? AND sim='acc'""",
+            (precipitation, weather_type, wetness, air, track, session_id),
+        )
 
     def _save_parsed(self, parsed: Dict, source_id: Optional[int]) -> int:
         weather = self._weather_for_session(source_id, parsed)
@@ -235,11 +329,12 @@ class Importer:
             last = max(filter(None, [server["last_session_at"], parsed["session_datetime"]]))
 
             self.db.execute(
-                "UPDATE servers SET server_name=?, track_name=?, track_layout=?, first_session_at=?, last_session_at=? WHERE id=?",
+                "UPDATE servers SET server_name=?, track_name=?, track_layout=?, sim=?, first_session_at=?, last_session_at=? WHERE id=?",
                 (
                     parsed["server_name"],
                     parsed["track_name"],
                     parsed.get("track_layout"),
+                    parsed.get("sim") or "evo",
                     first,
                     last,
                     server_id,
@@ -248,12 +343,13 @@ class Importer:
 
         else:
             cur = self.db.execute(
-                "INSERT INTO servers(server_key,server_name,track_name,track_layout,first_session_at,last_session_at) VALUES(?,?,?,?,?,?)",
+                "INSERT INTO servers(server_key,server_name,track_name,track_layout,sim,first_session_at,last_session_at) VALUES(?,?,?,?,?,?,?)",
                 (
                     parsed["server_key"],
                     parsed["server_name"],
                     parsed["track_name"],
                     parsed.get("track_layout"),
+                    parsed.get("sim") or "evo",
                     parsed["session_datetime"],
                     parsed["session_datetime"],
                 ),
@@ -264,6 +360,7 @@ class Importer:
             """INSERT INTO sessions(
                 server_id,
                 source_id,
+                sim,
                 file_hash,
                 file_path,
                 session_name,
@@ -275,6 +372,7 @@ class Importer:
                 best_lap_ms,
                 weather_log_at,
                 ambient_temperature_c,
+                track_temperature_c,
                 weather_type,
                 sky_coverage,
                 gloominess,
@@ -292,10 +390,11 @@ class Importer:
                 track_rubber,
                 track_marbles
             )
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 server_id,
                 source_id,
+                parsed.get("sim") or "evo",
                 parsed["file_hash"],
                 parsed["file_path"],
                 parsed.get("session_name"),
@@ -307,6 +406,7 @@ class Importer:
                 parsed.get("best_lap_ms"),
                 weather.get("weather_log_at") or "",
                 weather.get("ambient_temperature_c"),
+                weather.get("track_temperature_c"),
                 weather.get("weather_type") or "",
                 weather.get("sky_coverage"),
                 weather.get("gloominess"),
@@ -403,6 +503,8 @@ class Importer:
         return session_id
 
     def _weather_for_session(self, source_id: Optional[int], parsed: Dict) -> Dict:
+        if parsed.get("sim") == "acc":
+            return parsed.get("weather") or {}
         if not source_id:
             return {}
         src = self.db.one("SELECT server_log_path FROM import_sources WHERE id=?", (source_id,))
@@ -459,6 +561,7 @@ class Importer:
             """UPDATE sessions
                SET weather_log_at=?,
                    ambient_temperature_c=?,
+                   track_temperature_c=?,
                    weather_type=?,
                    sky_coverage=?,
                    gloominess=?,
@@ -479,6 +582,7 @@ class Importer:
             (
                 weather.get("weather_log_at") or "",
                 weather.get("ambient_temperature_c"),
+                weather.get("track_temperature_c"),
                 weather.get("weather_type") or "",
                 weather.get("sky_coverage"),
                 weather.get("gloominess"),

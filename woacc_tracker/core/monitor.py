@@ -4,14 +4,17 @@ from pathlib import Path
 from typing import Callable, Dict, List
 
 from .importer import Importer
+from .source_discovery import sync_managed_sources
+from .config import save_config
 
 
 class FolderMonitor:
-    def __init__(self, importer: Importer, sources_getter: Callable[[], List[Dict]], interval_sec: int = 10, log: Callable[[str], None] = print):
+    def __init__(self, importer: Importer, sources_getter: Callable[[], List[Dict]], interval_sec: int = 10, log: Callable[[str], None] = print, cfg: dict | None = None):
         self.importer = importer
         self.sources_getter = sources_getter
         self.interval_sec = max(2, int(interval_sec or 10))
         self.log = log
+        self.cfg = cfg
         self._stop = threading.Event()
         self._thread = None
 
@@ -29,9 +32,20 @@ class FolderMonitor:
     def stop(self) -> None:
         self._stop.set()
 
+    def wait(self) -> None:
+        if self._thread and self._thread is not threading.current_thread():
+            self._thread.join()
+
     def scan_once(self) -> None:
+        if self.cfg is not None and sync_managed_sources(self.cfg):
+            save_config(self.cfg)
+        mode = (self.cfg or {}).get("tracker_mode", "evo")
         for source in self.sources_getter():
+            if self._stop.is_set():
+                break
             if not source.get("enabled", True):
+                continue
+            if mode != "both" and (source.get("sim") or "evo") != mode:
                 continue
             path = Path(source.get("path", ""))
             name = source.get("name") or path.name

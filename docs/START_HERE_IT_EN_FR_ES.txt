@@ -1,0 +1,65 @@
+WOACC TRACKER 15.1.0 - WINDOWS x64
+============================================================
+
+ITALIANO
+1. Estrarre TUTTO lo ZIP in una cartella permanente.
+2. Aprire WOACC Tracker.exe. Python non serve.
+3. Non separare _internal e WOACC Tracker Engine dall'app.
+4. In Generale scegliere EVO, ACC o both. Configurare le schede EVO/ACC.
+5. Con ACCweb / EVO Web Server Manager scegliere la cartella del manager
+   e sincronizzare: non duplicare manualmente le stesse sorgenti.
+6. Senza manager usare Aggiungi cartella risultati nella scheda del sim.
+   Il log viene cercato automaticamente; se manca viene chiesto il percorso.
+7. Salvare, premere Avvia Tracker, poi Apri Web App.
+8. Consultare il manuale PDF nella cartella Manual prima di configurare
+   rete, API, Discord o servizio Windows.
+Per aggiornare: fermare il motore/servizio e fare backup di configurazione
+e database. Non cancellare %APPDATA%\WOACC_Tracker.
+
+ENGLISH
+1. Extract the ENTIRE ZIP into a permanent folder.
+2. Open WOACC Tracker.exe. Python is not required.
+3. Keep _internal and WOACC Tracker Engine with the application.
+4. In General choose EVO, ACC or both, then configure the EVO/ACC tabs.
+5. With ACCweb / EVO Web Server Manager select its root folder and sync;
+   do not manually duplicate the same managed sources.
+6. Without a manager use Add result folder in the simulator tab.
+   Logs are detected automatically; missing logs trigger a file picker.
+7. Save, Start Tracker, then Open Web App.
+8. Read the PDF in Manual before configuring networking, API, Discord
+   or the Windows service.
+To upgrade: stop the engine/service and back up configuration/database.
+Do not delete %APPDATA%\WOACC_Tracker.
+
+FRANCAIS
+1. Extraire TOUT le ZIP dans un dossier permanent.
+2. Ouvrir WOACC Tracker.exe. Python n'est pas necessaire.
+3. Conserver _internal et WOACC Tracker Engine avec l'application.
+4. Dans General choisir EVO, ACC ou both, puis configurer les onglets.
+5. Avec ACCweb / EVO Web Server Manager choisir son dossier principal
+   et synchroniser. Ne pas dupliquer les sources gerees manuellement.
+6. Sans gestionnaire ajouter le dossier des resultats dans l'onglet du sim.
+   Le journal est detecte; s'il manque, choisir son chemin manuellement.
+7. Enregistrer, demarrer le tracker, puis ouvrir l'application web.
+8. Lire le PDF du dossier Manual avant de configurer reseau, API,
+   Discord ou service Windows.
+Mise a jour: arreter le moteur/service et sauvegarder configuration/base.
+Ne pas supprimer %APPDATA%\WOACC_Tracker.
+
+ESPANOL
+1. Extraer TODO el ZIP en una carpeta permanente.
+2. Abrir WOACC Tracker.exe. No necesita Python.
+3. Mantener _internal y WOACC Tracker Engine con la aplicacion.
+4. En General elegir EVO, ACC o both y configurar las pestanas EVO/ACC.
+5. Con ACCweb / EVO Web Server Manager elegir su carpeta principal y
+   sincronizar. No duplicar manualmente las mismas fuentes gestionadas.
+6. Sin gestor anadir la carpeta de resultados en la pestana del simulador.
+   El log se busca automaticamente; si falta se solicita su ruta.
+7. Guardar, iniciar el tracker y abrir la aplicacion web.
+8. Leer el PDF de Manual antes de configurar red, API, Discord o servicio.
+Actualizar: detener motor/servicio y guardar configuracion/base de datos.
+No borrar %APPDATA%\WOACC_Tracker.
+
+Manual: Manual/WOACC_Tracker_15.1.0_Manual_IT_EN_FR_ES.pdf
+Demo: https://woacc.zapto.org/tracker/
+Repository: https://github.com/mostrotarlo/woacc-evo-tracker

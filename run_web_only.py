@@ -2,16 +2,18 @@ from pathlib import Path
 from woacc_tracker.core.config import load_config, save_config
 from woacc_tracker.core.database import Database
 from woacc_tracker.core.importer import Importer
+from woacc_tracker.core.source_discovery import sync_managed_sources
 from woacc_tracker.web.app import create_app
 
 if __name__ == "__main__":
     cfg = load_config()
+    sync_managed_sources(cfg)
     db = Database(cfg["database_path"])
     db.init_schema()
     importer = Importer(db)
     for source in cfg.get("sources", []):
-        if source.get("enabled", True):
-            importer.import_folder(Path(source["path"]), source.get("name") or source["path"])
+        if source.get("enabled", True) and (cfg.get("tracker_mode") == "both" or source.get("sim", "evo") == cfg.get("tracker_mode", "evo")):
+            importer.import_folder(Path(source["path"]), source.get("name") or source["path"], source)
     save_config(cfg)
     app = create_app(db, cfg)
     host = "0.0.0.0" if cfg.get("remote_access") else "127.0.0.1"

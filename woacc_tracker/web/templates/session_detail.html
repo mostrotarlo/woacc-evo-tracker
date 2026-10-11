@@ -8,12 +8,13 @@
 </div>
 <section class="panel">
   <h2>{% if sess.session_type|lower == 'race' %}{{ t('race_result') }}{% else %}{{ t('time_leaderboard') }}{% endif %}</h2>
-  {% if sess.weather_log_at or sess.ambient_temperature_c is not none or sess.weather_type %}
+  {% if sess.sim == 'acc' or sess.weather_log_at or sess.ambient_temperature_c is not none or sess.weather_type %}
   <div class="mini-stats">
-    <div><span>{{ t('weather') }}</span><strong>{{ sess.weather_type or t('none') }}</strong></div>
-    <div><span>{{ t('air_temp') }}</span><strong>{% if sess.ambient_temperature_c is not none %}{{ '%.1f'|format(sess.ambient_temperature_c) }} °C{% else %}{{ t('none') }}{% endif %}</strong></div>
-    <div><span>{{ t('track_grip') }}</span><strong>{% if sess.track_grip is not none %}{{ '%.2f'|format(sess.track_grip) }}{% else %}{{ sess.initial_grip_label or t('none') }}{% endif %}</strong></div>
-    <div><span>{{ t('wetness') }}</span><strong>{% if sess.initial_global_wetness is not none %}{{ '%.2f'|format(sess.initial_global_wetness) }}{% else %}{{ t('none') }}{% endif %}</strong></div>
+    <div><span>{{ t('weather') }}</span><strong>{{ sess.weather_type or t('not_available', 'ND') }}</strong></div>
+    <div><span>{{ t('air_temp') }}</span><strong>{% if sess.ambient_temperature_c is not none %}{{ '%.1f'|format(sess.ambient_temperature_c) }} °C{% else %}{{ t('not_available', 'ND') }}{% endif %}</strong></div>
+    {% if sess.sim == 'acc' %}<div><span>{{ t('track_temp', 'Track') }}</span><strong>{% if sess.track_temperature_c is not none %}{{ '%.1f'|format(sess.track_temperature_c) }} °C{% else %}{{ t('not_available', 'ND') }}{% endif %}</strong></div>{% endif %}
+    <div><span>{{ t('track_grip') }}</span><strong>{% if sess.track_grip is not none %}{{ '%.2f'|format(sess.track_grip) }}{% else %}{{ sess.initial_grip_label or t('not_available', 'ND') }}{% endif %}</strong></div>
+    <div><span>{{ t('wetness') }}</span><strong>{% if sess.initial_global_wetness is not none %}{{ '%.2f'|format(sess.initial_global_wetness) }}{% else %}{{ t('not_available', 'ND') }}{% endif %}</strong></div>
     <div><span>{{ t('wind') }}</span><strong>{% if sess.wind_speed_m_s is not none %}{{ '%.1f'|format(sess.wind_speed_m_s) }} m/s{% else %}{{ t('none') }}{% endif %}</strong></div>
     <div><span>{{ t('humidity') }}</span><strong>{% if sess.humidity is not none %}{{ '%.0f'|format(sess.humidity) }}{% else %}{{ t('none') }}{% endif %}</strong></div>
     <div><span>{{ t('rubber') }}</span><strong>{% if sess.track_rubber is not none %}{{ '%.2f'|format(sess.track_rubber) }}{% else %}{{ t('none') }}{% endif %}</strong></div>
@@ -58,6 +59,7 @@
           <div class="laps-box">
             <h3>{{ e.display_name }} - {{ e.car_name }}</h3>
             <div class="mini-stats">
+              {% if sess.sim == 'acc' %}<div><span>{{ t('steam_id', 'Steam ID') }}</span><strong>{{ e.steam_id or t('not_available', 'ND') }}</strong></div>{% endif %}
               <div><span>{{ t('best_lap') }}</span><strong>{{ e.best_lap_ms|lap_time }}</strong></div>
               <div><span>{{ t('potential_lap') }}</span><strong>{{ e.potential_lap_ms|lap_time }}</strong></div>
               <div><span>{{ t('avg_valid') }}</span><strong>{{ e.avg_valid_lap_ms|lap_time }}</strong></div>

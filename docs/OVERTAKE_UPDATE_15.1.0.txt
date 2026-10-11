@@ -1,0 +1,24 @@
+Update title:
+v15.1.0 - Unified ACC + EVO support and Windows service
+
+Update message:
+WOACC Tracker now supports both Assetto Corsa EVO and Assetto Corsa Competizione in one application.
+
+Choose EVO, ACC or both, with separate archives and simulator settings. Users of EVO Web Server Manager or ACCweb can select the manager folder to discover servers automatically. Standalone result folders can still be added manually, with automatic log detection and a manual fallback.
+
+This release also adds an optional Windows service: the tracker can start automatically before Windows login and keep running when the desktop window is closed.
+
+ACC imports preserve official lap validity, available driver IDs and wet-session flags. Configured temperatures are read from matching server settings when available; missing values remain unknown. The Bridge API supports both simulators for updated external monitors.
+
+A complete multilingual PDF manual is included in Italian, English, French and Spanish. It explains installation, every settings section, monitored folders, notifications, live timing, Windows service and network access with Caddy or without it.
+
+IMPORTANT: extract the complete ZIP and keep the _internal and WOACC Tracker Engine folders. Back up your configuration/database and stop the tracker before upgrading. Python is not required for the Windows executable package.
+
+EVO live lap validity remains provisional where the log does not expose track-limit invalidation; archived results remain authoritative. Live race-position timing is still pending. The external ACC JSON Monitor Plus app is not included.
+
+Demo: https://woacc.zapto.org/tracker/
+
+Attachment to upload:
+WOACC_Tracker_v15.1.0_Windows_x64.zip
+
+Prepared draft only - not yet published.

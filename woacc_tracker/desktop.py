@@ -6,41 +6,32 @@ from datetime import datetime
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
-from wsgiref.simple_server import make_server, WSGIRequestHandler, WSGIServer
-from socketserver import ThreadingMixIn
 
-from .core.config import load_config, save_config, DEFAULT_WOACC_API_KEY
+from .core.config import load_config, save_config, DEFAULT_WOACC_API_KEY, CONFIG_PATH
 from .core.translations import available_languages, load_vocabulary, DEFAULT_LANGUAGE
 from .core.database import Database
 from .core.importer import Importer
-from .core.monitor import FolderMonitor
 from .core.security import hash_password
 from .core.server_log import is_live_leaderboard_enabled
-from .web.app import create_app
+from .core.source_discovery import sync_managed_sources
+from . import __version__
+from .runtime import TrackerRuntime
+from .windows_service import service_status, service_config_path, run_service_action
 
 
 WINDOWS_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 WINDOWS_RUN_VALUE = "WOACC Tracker"
 
 
-class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
-    daemon_threads = True
-
-
-class QuietLivePollingRequestHandler(WSGIRequestHandler):
-    def log_message(self, format, *args):
-        path = getattr(self, "path", "") or ""
-        if "/api/live/leaderboard/" in path or "/api/live/status" in path:
-            return
-        super().log_message(format, *args)
-
-
 class TrackerDesktop:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("WOACC Tracker v14.1.2")
+        self._ui_thread = threading.get_ident()
+        self.root.title(f"WOACC Tracker v{__version__}")
         self.root.geometry("1150x760")
         self.cfg = load_config()
+        if sync_managed_sources(self.cfg):
+            save_config(self.cfg)
         self._sync_windows_autostart(bool(self.cfg.get("auto_start_tracker", False)))
         self.languages = available_languages()
         self.lang = (self.cfg.get("language") or DEFAULT_LANGUAGE).lower()
@@ -54,10 +45,15 @@ class TrackerDesktop:
         self.httpd = None
         self.server_thread = None
         self.running = False
+        self.runtime = None
+        self._service_busy = False
+        self._manual_import_running = False
         self._build_ui()
         self._load_sources_to_tree()
         self._log(self._t("desktop_ready", "Application ready"))
         self.root.after(700, self._auto_start_tracker_if_enabled)
+        self.root.after(5000, self._poll_service_status)
+        self.root.after(15000, self._refresh_managed_sources)
 
 
     def _t(self, key: str, default: str = None) -> str:
@@ -96,25 +92,72 @@ class TrackerDesktop:
     def _build_ui(self):
         for child in self.root.winfo_children():
             child.destroy()
-        self.root.title(self._t("desktop_window_title", "WOACC Tracker"))
+        self.root.title(f"{self._t('desktop_window_title', 'WOACC Tracker')} v{__version__}")
         self.status_var = tk.StringVar(value=self._t("desktop_status_stopped", "STOPPED"))
         top = ttk.Frame(self.root, padding=10)
         top.pack(fill="x")
         ttk.Label(top, text="WOACC Tracker", font=("Segoe UI", 18, "bold")).pack(side="left")
         ttk.Label(top, textvariable=self.status_var, foreground="red", font=("Segoe UI", 12, "bold")).pack(side="right")
 
-        nb = ttk.Notebook(self.root)
+        # Native Windows notebook tabs ignore background colors.
+        ttk.Style(self.root).layout("Tracker.TNotebook.Tab", [])
+        tab_bar = tk.Frame(self.root, background="#eef1f4")
+        tab_bar.pack(fill="x", padx=10, pady=(8, 0))
+        nb = ttk.Notebook(self.root, style="Tracker.TNotebook")
         nb.pack(fill="both", expand=True, padx=10, pady=8)
         self.tab_main = ttk.Frame(nb, padding=10)
+        self.tab_evo = ttk.Frame(nb, padding=10)
+        self.tab_acc = ttk.Frame(nb, padding=10)
         self.tab_sources = ttk.Frame(nb, padding=10)
         self.tab_theme = ttk.Frame(nb, padding=10)
         self.tab_logs = ttk.Frame(nb, padding=10)
         nb.add(self.tab_main, text=self._t("desktop_tab_general", "General"))
+        nb.add(self.tab_evo, text="EVO")
+        nb.add(self.tab_acc, text="ACC")
         nb.add(self.tab_sources, text=self._t("desktop_tab_sources", "Monitored folders"))
         nb.add(self.tab_theme, text=self._t("desktop_tab_theme", "Web theme"))
         nb.add(self.tab_logs, text=self._t("logs", "Logs"))
 
+        selected_tab = tk.IntVar(value=0)
+        tab_colors = (
+            ("#e1e9f5", "#28558b"),
+            ("#d9f2e5", "#17613e"),
+            ("#fbe1e3", "#a12b37"),
+            ("#e0eef5", "#235e78"),
+            ("#eee3f5", "#704785"),
+            ("#e5e8ec", "#45515f"),
+        )
+        tab_buttons = []
+        for index, (background, accent) in enumerate(tab_colors):
+            button = tk.Radiobutton(
+                tab_bar, text=nb.tab(index, "text"), variable=selected_tab,
+                value=index, indicatoron=False, font=("Segoe UI", 10, "bold"),
+                background=background, foreground=accent, selectcolor=accent,
+                activebackground=background, activeforeground=accent,
+                relief="flat", offrelief="flat", borderwidth=0,
+                padx=14, pady=8, highlightthickness=1, highlightbackground=background,
+                highlightcolor=accent, command=lambda i=index: nb.select(i),
+            )
+            button.pack(side="left", padx=(0, 3))
+            tab_buttons.append(button)
+
+        def update_tab_colors(event=None):
+            current = nb.index(nb.select())
+            selected_tab.set(current)
+            for index, button in enumerate(tab_buttons):
+                background, accent = tab_colors[index]
+                button.configure(
+                    foreground="white" if index == current else accent,
+                    activebackground=accent if index == current else background,
+                    activeforeground="white" if index == current else accent,
+                )
+
+        nb.bind("<<NotebookTabChanged>>", update_tab_colors)
+        update_tab_colors()
+
         self._build_main_tab()
+        self._build_sim_tab(self.tab_evo, "evo")
+        self._build_sim_tab(self.tab_acc, "acc")
         self._build_sources_tab()
         self._build_theme_tab()
         self._build_logs_tab()
@@ -134,10 +177,19 @@ class TrackerDesktop:
         self.password_var = tk.StringVar(value="")
         self.scan_interval_var = tk.IntVar(value=int(self.cfg.get("scan_interval_sec", 10)))
         self.language_var = tk.StringVar(value=self._language_display(self.lang))
+        self.mode_var = tk.StringVar(value=self.cfg.get("tracker_mode", "evo"))
+        self.default_sim_var = tk.StringVar(value=self.cfg.get("default_sim", "evo"))
+
+        opening_sim = ttk.Frame(general)
+        ttk.Label(opening_sim, text=self._t("desktop_default_sim", "Opening view (both mode)")).pack(side="left", padx=(0, 8))
+        ttk.Radiobutton(opening_sim, text="EVO", variable=self.default_sim_var, value="evo").pack(side="left", padx=(0, 5))
+        ttk.Radiobutton(opening_sim, text="ACC", variable=self.default_sim_var, value="acc").pack(side="left")
+        opening_sim.grid(row=0, column=2, sticky="w", padx=8)
 
         language_combo = ttk.Combobox(general, textvariable=self.language_var, values=self._language_values(), width=24, state="readonly")
         language_combo.bind("<<ComboboxSelected>>", self._on_language_change)
         rows = [
+            (self._t("desktop_tracker_mode", "Tracker mode"), ttk.Combobox(general, textvariable=self.mode_var, values=("evo", "acc", "both"), width=12, state="readonly")),
             (self._t("desktop_community_name", "Community name"), ttk.Entry(general, textvariable=self.community_var, width=55)),
             (self._t("desktop_web_port", "Web app port"), ttk.Entry(general, textvariable=self.port_var, width=12)),
             (self._t("desktop_scan_interval", "Scan interval (sec)"), ttk.Entry(general, textvariable=self.scan_interval_var, width=12)),
@@ -148,19 +200,32 @@ class TrackerDesktop:
         for i, (label, widget) in enumerate(rows):
             ttk.Label(general, text=label).grid(row=i, column=0, sticky="w", pady=5)
             widget.grid(row=i, column=1, sticky="w", pady=5, padx=8)
-        ttk.Label(general, text=self._t("desktop_base_path_hint", "e.g. /tracker if you use Caddy under https://domain/tracker")).grid(row=4, column=2, sticky="w", pady=5)
-        ttk.Checkbutton(general, text=self._t("desktop_remote_access", "Remote / LAN access (bind 0.0.0.0)"), variable=self.remote_var).grid(row=6, column=1, sticky="w", pady=5)
-        ttk.Checkbutton(general, text=self._t("desktop_woacc_share", "Share data with WOACC (Bridge API enabled)"), variable=self.woacc_share_var).grid(row=7, column=1, sticky="w", pady=5)
-        ttk.Label(general, text=self._t("desktop_woacc_share_hint", "Enabled by default. Disable only if you do not want ACC_JSON_Monitor_Plus 2 to import this tracker.")).grid(row=7, column=2, sticky="w", pady=5)
+        ttk.Label(general, text=self._t("desktop_base_path_hint", "e.g. /tracker if you use Caddy under https://domain/tracker")).grid(row=5, column=2, sticky="w", pady=5)
+        ttk.Checkbutton(general, text=self._t("desktop_remote_access", "Remote / LAN access (bind 0.0.0.0)"), variable=self.remote_var).grid(row=7, column=1, sticky="w", pady=5)
+        ttk.Checkbutton(general, text=self._t("desktop_woacc_share", "Share data with WOACC (Bridge API enabled)"), variable=self.woacc_share_var).grid(row=8, column=1, sticky="w", pady=5)
+        ttk.Label(general, text=self._t("desktop_woacc_share_hint", "Enabled by default. Disable only if you do not want ACC_JSON_Monitor_Plus 2 to import this tracker.")).grid(row=8, column=2, sticky="w", pady=5)
         ttk.Checkbutton(
             general,
             text=self._t("desktop_auto_start_tracker", "Start tracker automatically when the app opens"),
             variable=self.auto_start_tracker_var,
             command=self._on_auto_start_toggle,
-        ).grid(row=8, column=1, sticky="w", pady=5)
-        ttk.Checkbutton(general, text=self._t("desktop_password_protect", "Protect web app with password"), variable=self.password_enabled_var).grid(row=9, column=1, sticky="w", pady=5)
-        ttk.Label(general, text=self._t("desktop_new_password", "New password (leave empty to keep current)")).grid(row=10, column=0, sticky="w", pady=5)
-        ttk.Entry(general, textvariable=self.password_var, show="*", width=35).grid(row=10, column=1, sticky="w", pady=5, padx=8)
+        ).grid(row=9, column=1, sticky="w", pady=5)
+        ttk.Checkbutton(general, text=self._t("desktop_password_protect", "Protect web app with password"), variable=self.password_enabled_var).grid(row=10, column=1, sticky="w", pady=5)
+        ttk.Label(general, text=self._t("desktop_new_password", "New password (leave empty to keep current)")).grid(row=11, column=0, sticky="w", pady=5)
+        ttk.Entry(general, textvariable=self.password_var, show="*", width=35).grid(row=11, column=1, sticky="w", pady=5, padx=8)
+
+        service_box = ttk.LabelFrame(frm, text=self._t("desktop_windows_service", "Windows service"), padding=8)
+        service_box.pack(fill="x", pady=(8, 0))
+        self.service_status_var = tk.StringVar()
+        ttk.Label(service_box, textvariable=self.service_status_var).pack(side="left", padx=5)
+        for action, key, fallback in (
+            ("install", "desktop_service_install", "Install and start"),
+            ("restart", "desktop_service_restart", "Restart service"),
+            ("remove", "desktop_service_remove", "Remove service"),
+        ):
+            ttk.Button(service_box, text=self._t(key, fallback),
+                       command=lambda a=action: self._service_action(a)).pack(side="left", padx=5)
+        self._refresh_service_status()
 
         actions = ttk.LabelFrame(frm, text=self._t("desktop_actions", "Actions"), padding=12)
         actions.pack(fill="x", pady=12)
@@ -191,13 +256,19 @@ class TrackerDesktop:
         top = ttk.Frame(self.tab_sources)
         top.pack(fill="x", pady=(0, 8))
 
-        ttk.Button(top,text=self._t("desktop_add_folder", "➕ Add folder"),command=self.add_source).pack(side="left", padx=4)
         ttk.Button(top,text=self._t("desktop_edit_name", "✏️ Edit name"),command=self.edit_source_name).pack(side="left", padx=4)
         ttk.Button(top,text=self._t("desktop_remove", "❌ Remove"),command=self.remove_source).pack(side="left", padx=4)
         ttk.Button(top,text=self._t("desktop_toggle", "Enable/Disable"),command=self.toggle_source).pack(side="left", padx=4)
         ttk.Button(top,text=self._t("desktop_toggle_live_leaderboard", "Live leaderboard ON/OFF"),command=self.toggle_source_live_leaderboard).pack(side="left", padx=4)
-        ttk.Button(top,text=self._t("desktop_select_server_log", "Select Assetto Corsa EVO Server.txt"),command=self.set_source_server_log).pack(side="left", padx=4)
-        ttk.Button(top,text=self._t("desktop_sync_server_log", "Sync server log"),command=self.sync_source_server_log).pack(side="left", padx=4)
+        ttk.Button(top,text=self._t("desktop_select_server_log", "Edit log path"),command=self.set_source_server_log).pack(side="left", padx=4)
+        maintenance = ttk.Menubutton(top, text=self._t("desktop_maintenance", "Maintenance"))
+        maintenance_menu = tk.Menu(maintenance, tearoff=False)
+        maintenance_menu.add_command(
+            label=self._t("desktop_sync_server_log", "Sync server log"),
+            command=self.sync_source_server_log,
+        )
+        maintenance.configure(menu=maintenance_menu)
+        maintenance.pack(side="left", padx=4)
 
         ttk.Button(
             top,
@@ -230,6 +301,7 @@ class TrackerDesktop:
                 "session",
                 "license",
                 "live",
+                "sim",
                 "name",
                 "path",
                 "server_log",
@@ -246,6 +318,7 @@ class TrackerDesktop:
             ("session", self._t("sessions", "Sessions"), 80),
             ("license", self._t("licenses", "Licenses"), 80),
             ("live", self._t("live_leaderboard", "Live leaderboard"), 120),
+            ("sim", "Sim", 55),
             ("name", self._t("desktop_name", "Name"), 180),
             ("path", self._t("desktop_path", "Path"), 360),
             ("server_log", self._t("desktop_server_log", "Server log"), 120),
@@ -256,6 +329,44 @@ class TrackerDesktop:
             self.sources_tree.column(col,width=width)
 
         self.sources_tree.pack(fill="both", expand=True)
+
+    def _build_sim_tab(self, frame, sim: str):
+        key = "evo_manager_path" if sim == "evo" else "accweb_path"
+        label = "EVO Web Server Manager" if sim == "evo" else "ACCweb"
+        var = tk.StringVar(value=self.cfg.get(key) or "")
+        if sim == "evo":
+            self.evo_manager_var = var
+        else:
+            self.accweb_var = var
+        box = ttk.LabelFrame(frame, text=label, padding=12)
+        box.pack(fill="x")
+        ttk.Label(box, text=self._t("desktop_manager_folder", "Manager folder")).grid(row=0, column=0, sticky="w")
+        ttk.Entry(box, textvariable=var, width=90).grid(row=0, column=1, sticky="ew", padx=8)
+        ttk.Button(box, text=self._t("desktop_browse", "Browse"), command=lambda: self._browse_manager(var)).grid(row=0, column=2)
+        ttk.Button(box, text=self._t("desktop_sync_managed", "Sync servers"), command=self._sync_sources_from_ui).grid(row=1, column=1, sticky="w", pady=10)
+        ttk.Button(box, text=self._t("desktop_add_manual", "Add results folder"), command=lambda: self.add_source(sim)).grid(row=1, column=2, sticky="w", pady=10)
+        box.columnconfigure(1, weight=1)
+        ttk.Label(frame, text=self._t("desktop_evo_manager_hint" if sim == "evo" else "desktop_accweb_hint",
+            "Server folders are detected automatically.")).pack(anchor="w", pady=12)
+
+    def _browse_manager(self, var):
+        chosen = filedialog.askdirectory(title="Select manager folder")
+        if chosen:
+            var.set(chosen)
+
+    def _sync_sources_from_ui(self):
+        self.cfg["evo_manager_path"] = self.evo_manager_var.get().strip()
+        self.cfg["accweb_path"] = self.accweb_var.get().strip()
+        if sync_managed_sources(self.cfg):
+            save_config(self.cfg)
+            self._load_sources_to_tree()
+        self._log("Managed servers synchronized")
+
+    def _refresh_managed_sources(self):
+        if sync_managed_sources(self.cfg):
+            save_config(self.cfg)
+            self._load_sources_to_tree()
+        self.root.after(15000, self._refresh_managed_sources)
 
     def _build_theme_tab(self):
         theme = self.cfg.get("theme", {})
@@ -336,6 +447,9 @@ class TrackerDesktop:
         self.log_text.pack(fill="both", expand=True)
 
     def _log(self, msg: str):
+        if threading.get_ident() != self._ui_thread:
+            self.root.after(0, self._log, msg)
+            return
         self.log_text.insert("end", msg + "\n")
         self.log_text.see("end")
 
@@ -356,6 +470,7 @@ class TrackerDesktop:
                     self._t("yes", "Yes") if src.get("session_notify_enabled") else self._t("no", "No"),
                     self._t("yes", "Yes") if src.get("license_enabled") else self._t("no", "No"),
                     self._t("yes", "Yes") if is_live_leaderboard_enabled(src) else self._t("no", "No"),
+                    (src.get("sim") or "evo").upper(),
                     src.get("name",""),
                     src.get("path",""),
                     self._t("desktop_set", "Set") if src.get("server_log_path") else self._t("no", "No"),
@@ -365,6 +480,11 @@ class TrackerDesktop:
             )
 
     def save_settings(self):
+        self.cfg["tracker_mode"] = self.mode_var.get() if self.mode_var.get() in {"evo", "acc", "both"} else "evo"
+        self.cfg["default_sim"] = self.default_sim_var.get() if self.default_sim_var.get() in {"evo", "acc"} else "evo"
+        self.cfg["evo_manager_path"] = self.evo_manager_var.get().strip()
+        self.cfg["accweb_path"] = self.accweb_var.get().strip()
+        sync_managed_sources(self.cfg)
         self.cfg["community_name"] = self.community_var.get().strip() or "WOACC Tracker"
         self.cfg["port"] = int(self.port_var.get())
         self.cfg["remote_access"] = bool(self.remote_var.get())
@@ -400,6 +520,8 @@ class TrackerDesktop:
     def _sync_windows_autostart(self, enabled: bool) -> None:
         if sys.platform != "win32":
             return
+        if service_status() != "not_installed":
+            enabled = False
         try:
             import winreg
 
@@ -426,8 +548,8 @@ class TrackerDesktop:
         save_config(self.cfg)
         self._log(self._t("desktop_settings_saved", "Settings saved"))
 
-    def add_source(self):
-        path = filedialog.askdirectory(title=self._t("desktop_select_results_folder", "Select EVO results folder"))
+    def add_source(self, sim="evo"):
+        path = filedialog.askdirectory(title=f"Select {sim.upper()} results folder")
         if not path:
             return
 
@@ -437,19 +559,37 @@ class TrackerDesktop:
             initialvalue=Path(path).name
         ) or Path(path).name
 
-        server_log_path = filedialog.askopenfilename(
-            title=self._t("desktop_select_server_log_file", "Select Assetto Corsa EVO Server.txt"),
-            filetypes=[("Assetto Corsa EVO Server.txt", "Assetto Corsa EVO Server.txt"), ("Text files", "*.txt"), ("All files", "*.*")]
-        )
-        if server_log_path:
+        server_log_path = ""
+        if sim == "evo":
+            inferred = Path(path).parent / "serverConfig" / "Assetto Corsa EVO Server.txt"
+            if inferred.is_file():
+                server_log_path = str(inferred)
+            else:
+                server_log_path = filedialog.askopenfilename(
+                    title=self._t("desktop_select_server_log_file", "Select Assetto Corsa EVO Server.txt"),
+                    initialdir=str(Path(path).parent),
+                    filetypes=[("Assetto Corsa EVO Server.txt", "Assetto Corsa EVO Server.txt"), ("Text files", "*.txt"), ("All files", "*.*")]
+                )
+        else:
+            inferred = Path(path).parent / "log" / "server.log"
+            if inferred.is_file():
+                server_log_path = str(inferred)
+            else:
+                server_log_path = filedialog.askopenfilename(
+                    title="Select ACC server.log",
+                    initialdir=str(Path(path).parent),
+                    filetypes=[("ACC server log", "*.log"), ("All files", "*.*")],
+                )
+        if sim == "evo" and server_log_path:
             self._offer_server_log_sync(server_log_path)
 
         self.cfg.setdefault("sources", []).append({
             "name": name,
+            "sim": sim,
             "path": path,
             "enabled": True,
             "server_log_path": server_log_path or "",
-            "live_leaderboard_enabled": False,
+            "live_leaderboard_enabled": sim == "acc" and bool(server_log_path),
 
             "announce_records": False,
             "announce_name": name,
@@ -479,10 +619,12 @@ class TrackerDesktop:
             return
         current = self.cfg["sources"][idx].get("server_log_path") or ""
         initial_dir = str(Path(current).parent) if current else str(Path(self.cfg["sources"][idx].get("path", "")).parent)
+        is_acc = self.cfg["sources"][idx].get("sim") == "acc"
         path = filedialog.askopenfilename(
-            title=self._t("desktop_select_server_log_file", "Select Assetto Corsa EVO Server.txt"),
+            title="Select ACC server.log" if is_acc else self._t("desktop_select_server_log_file", "Select Assetto Corsa EVO Server.txt"),
             initialdir=initial_dir,
-            filetypes=[("Assetto Corsa EVO Server.txt", "Assetto Corsa EVO Server.txt"), ("Text files", "*.txt"), ("All files", "*.*")]
+            filetypes=[("ACC server log", "*.log"), ("All files", "*.*")] if is_acc else
+                      [("Assetto Corsa EVO Server.txt", "Assetto Corsa EVO Server.txt"), ("Text files", "*.txt"), ("All files", "*.*")]
         )
         if not path:
             return
@@ -553,6 +695,9 @@ class TrackerDesktop:
                 self._t("desktop_select_source_first", "Select a server/folder first.")
             )
             return
+        if self.cfg["sources"][idx].get("sim") == "acc":
+            messagebox.showinfo("ACC", "ACCweb manages ACC logs. This action only applies to EVO logs.")
+            return
         log_path = self.cfg["sources"][idx].get("server_log_path") or ""
         if not log_path:
             messagebox.showwarning(
@@ -604,6 +749,7 @@ class TrackerDesktop:
         if not src.get("server_log_path"):
             messagebox.showwarning(
                 self._t("desktop_server_log_missing", "Server log missing"),
+                "Select ACC server.log before enabling live leaderboard." if src.get("sim") == "acc" else
                 self._t("desktop_select_server_log_before_live", "Select Assetto Corsa EVO Server.txt before enabling live leaderboard.")
             )
             return
@@ -868,24 +1014,47 @@ class TrackerDesktop:
         self.stats_var.set(f"Server: {row['servers']} | {self._t('sessions', 'Sessions')}: {row['sessions']} | {self._t('drivers', 'Drivers')}: {row['drivers']} | {self._t('laps', 'Laps')}: {row['laps']} | {self._t('event_records', 'Event records')}: {row['records']}")
 
     def manual_import(self):
+        if self._manual_import_running:
+            return
         self.save_settings()
+        self._manual_import_running = True
+        threading.Thread(target=self._manual_import_worker, daemon=True).start()
+
+    def _manual_import_worker(self):
         stats_total = {"found": 0, "imported": 0, "skipped": 0, "errors": 0}
-        for src in self.cfg.get("sources", []):
-            if not src.get("enabled", True):
-                continue
-            stats = self.importer.import_folder(Path(src["path"]), src.get("name") or Path(src["path"]).name, src)
-            for k in stats_total:
-                stats_total[k] += stats[k]
-            self._log(f"Import {src['path']}: {stats}")
+        try:
+            for src in list(self.cfg.get("sources", [])):
+                if not src.get("enabled", True):
+                    continue
+                stats = self.importer.import_folder(Path(src["path"]), src.get("name") or Path(src["path"]).name, src)
+                for key in stats_total:
+                    stats_total[key] += stats[key]
+                self._log(f"Import {src['path']}: {stats}")
+            self.root.after(0, self._manual_import_done, stats_total)
+        except Exception as exc:
+            self._log(f"Import error: {exc}")
+            self.root.after(0, self._manual_import_done, stats_total)
+
+    def _manual_import_done(self, stats_total):
+        self._manual_import_running = False
         self.refresh_stats()
         messagebox.showinfo(self._t("desktop_import_completed", "Import completed"), str(stats_total))
 
     def _auto_start_tracker_if_enabled(self):
+        if service_status() not in {"not_installed", "unavailable"}:
+            self._refresh_service_status()
+            return
         if self.cfg.get("auto_start_tracker", False):
             self._log(self._t("desktop_auto_starting_tracker", "Automatic tracker startup enabled"))
             self.start_tracker(automatic=True)
 
     def start_tracker(self, automatic=False):
+        if self._service_busy:
+            return
+        if service_status() not in {"not_installed", "unavailable"}:
+            if not automatic:
+                self._service_action("start")
+            return
         if self.running:
             return
         self.save_settings()
@@ -893,15 +1062,10 @@ class TrackerDesktop:
             if not automatic and not messagebox.askyesno(self._t("desktop_no_folder", "No folder"), self._t("desktop_no_active_folders_prompt", "There are no active folders. Start only the web app?")):
                 return
         try:
-            app = create_app(self.db, self.cfg)
             host = "0.0.0.0" if self.cfg.get("remote_access") else "127.0.0.1"
             port = int(self.cfg.get("port", 5055))
-            self.httpd = make_server(host, port, app, server_class=ThreadedWSGIServer, handler_class=QuietLivePollingRequestHandler)
-            self.server_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
-            self.server_thread.start()
-            self.monitor = FolderMonitor(self.importer, lambda: self.cfg.get("sources", []), int(self.cfg.get("scan_interval_sec", 10)), self._log)
-            self.monitor.scan_once()
-            self.monitor.start()
+            self.runtime = TrackerRuntime(self.cfg, self._log_safe, self.db, self.importer)
+            self.runtime.start()
             self.running = True
             self.status_var.set(self._t("desktop_status_active", "ACTIVE"))
             self._log(self._t("desktop_web_started", "Web app started on {host}:{port}").format(host=host, port=port))
@@ -917,14 +1081,86 @@ class TrackerDesktop:
                 messagebox.showerror(self._t("desktop_start_error", "Startup error"), str(exc))
 
     def stop_tracker(self):
-        if self.monitor:
-            self.monitor.stop()
-        if self.httpd:
-            self.httpd.shutdown()
-            self.httpd.server_close()
+        if service_status() not in {"not_installed", "unavailable"} and not self.running:
+            self._service_action("stop")
+            return
+        self._stop_local_tracker()
+
+    def _stop_local_tracker(self):
+        if self.runtime:
+            self.runtime.stop()
+            self.runtime = None
         self.running = False
         self.status_var.set(self._t("desktop_status_stopped", "STOPPED"))
         self._log(self._t("desktop_tracker_stopped", "Tracker stopped"))
+
+    def _refresh_service_status(self):
+        state = service_status()
+        labels = {"not_installed": self._t("desktop_service_absent", "Not installed"),
+                  "running": self._t("desktop_status_active", "ACTIVE"),
+                  "stopped": self._t("desktop_status_stopped", "STOPPED")}
+        self.service_status_var.set(labels.get(state, state))
+        if state not in {"not_installed", "unavailable"} and not self.running:
+            self.status_var.set(labels.get(state, state))
+
+    def _poll_service_status(self):
+        if not self._service_busy:
+            self._refresh_service_status()
+        self.root.after(5000, self._poll_service_status)
+
+    def _service_action(self, action):
+        if self._service_busy:
+            return
+        try:
+            from .windows_service import engine_path
+            engine_path()
+            state = service_status()
+            if action == "install" and state != "not_installed":
+                raise RuntimeError(self._t("desktop_service_exists", "Service already installed"))
+            if action != "install":
+                if service_config_path() != CONFIG_PATH.resolve():
+                    raise RuntimeError(self._t("desktop_service_other_config", "The service uses another configuration."))
+                if action == "start" and state == "running":
+                    self._refresh_service_status()
+                    return
+            if action in {"install", "remove"} and not messagebox.askyesno(
+                self._t("desktop_windows_service", "Windows service"),
+                self._t("desktop_service_confirm", "Administrator approval required. Continue?")):
+                return
+            self.save_settings()
+            self._restore_local_after_service_failure = self.running
+            if self.running:
+                self._stop_local_tracker()
+            self._service_busy = True
+            self.service_status_var.set(self._t("desktop_service_pending", "Operation in progress"))
+            def worker():
+                error = None
+                try:
+                    run_service_action(action, CONFIG_PATH.resolve())
+                except Exception as exc:
+                    error = str(exc)
+                self.root.after(0, lambda: self._service_action_done(error))
+            threading.Thread(target=worker, daemon=True).start()
+        except Exception as exc:
+            messagebox.showerror(self._t("desktop_windows_service", "Windows service"), str(exc))
+
+    def _service_action_done(self, error):
+        self._service_busy = False
+        self._refresh_service_status()
+        self._sync_windows_autostart(bool(self.cfg.get("auto_start_tracker")))
+        if error:
+            messagebox.showerror(self._t("desktop_windows_service", "Windows service"), error)
+            if getattr(self, "_restore_local_after_service_failure", False) and service_status() == "not_installed":
+                self.start_tracker(automatic=True)
+        else:
+            self._log(self._t("desktop_service_done", "Service operation completed"))
+
+    def close(self):
+        if self._service_busy:
+            return
+        # Closing the control panel must not stop the Windows service.
+        self._stop_local_tracker()
+        self.root.destroy()
 
     def open_woacc_community(self):
         public_url = (self.public_url_var.get() or self.cfg.get("public_url", "") or "").strip()
@@ -960,5 +1196,5 @@ class TrackerDesktop:
 def main():
     root = tk.Tk()
     app = TrackerDesktop(root)
-    root.protocol("WM_DELETE_WINDOW", lambda: (app.stop_tracker(), root.destroy()))
+    root.protocol("WM_DELETE_WINDOW", app.close)
     root.mainloop()
