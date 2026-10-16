@@ -1,4 +1,4 @@
-# WOACC EVO & ACC Tracker 15.1.1
+# WOACC EVO & ACC Tracker 15.1.2
 
 ![WOACC EVO & ACC Tracker](docs/assets/woacc-evo-acc-tracker-15.1.0.png)
 

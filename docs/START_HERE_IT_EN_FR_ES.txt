@@ -1,4 +1,4 @@
-WOACC TRACKER 15.1.1 - WINDOWS x64
+WOACC TRACKER 15.1.2 - WINDOWS x64
 ============================================================
 
 ITALIANO
@@ -60,6 +60,6 @@ ESPANOL
 Actualizar: detener motor/servicio y guardar configuracion/base de datos.
 No borrar %APPDATA%\WOACC_Tracker.
 
-Manual: Manual/WOACC_Tracker_15.1.1_Manual_IT_EN_FR_ES.pdf
+Manual: Manual/WOACC_Tracker_15.1.2_Manual_IT_EN_FR_ES.pdf
 Demo: https://woacc.zapto.org/tracker/
 Repository: https://github.com/mostrotarlo/woacc-evo-tracker

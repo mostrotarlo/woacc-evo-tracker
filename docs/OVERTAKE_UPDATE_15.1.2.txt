@@ -1,0 +1,55 @@
+TITLE
+WOACC EVO & ACC Tracker - Session Analyzer & Leaderboard
+
+VERSION
+15.1.2
+
+TAGLINE
+ACC and EVO session results, leaderboards and dedicated-server monitoring.
+
+DESCRIPTION
+WOACC EVO & ACC Tracker is a free Windows application for Assetto Corsa EVO
+and Assetto Corsa Competizione. Manage session results from both simulators
+through one application, with separate simulator views and archives.
+
+FEATURES
+- Select EVO, ACC or both, and choose the initial simulator shown on the web.
+- Automatically discover servers managed by EVO Web Server Manager or ACCweb.
+- Add result folders manually when not using these managers. The tracker looks
+  for the associated log and asks for its location if it cannot find it.
+- Browse sessions, driver results, leaderboards, records and license rankings.
+- Monitor supported live server data and enable live timing for selected sources.
+- View live lap sectors and driver lap details where the simulator log provides them.
+- Publish results through the web interface and optional Discord notifications.
+- Share session JSON data through the authenticated WOACC Bridge API.
+- Run through the desktop interface or as a Windows service.
+- Configure the interface in Italian, English, French or Spanish.
+
+INSTALLATION
+Download WOACC_Tracker_v15.1.2_Windows_x64.zip and extract the entire archive
+to a permanent folder. Start WOACC Tracker.exe. Python is not required.
+Keep both _internal directories and the WOACC Tracker Engine folder together.
+
+The archive includes a detailed PDF user manual in Italian, English, French
+and Spanish. It covers setup, ACC/EVO configuration, monitored folders,
+Windows service operation and network access with or without Caddy.
+
+UPGRADING
+Back up your configuration and database and stop the previous tracker or
+Windows service before upgrading. Do not run two instances against the same
+database. Existing configuration normally remains in
+%APPDATA%\WOACC_Tracker\config.json. Update shortcuts and the Windows service
+installation if the executable path changes.
+
+LIVE TIMING
+Live data availability depends on the simulator and log contents. EVO log-based
+lap validity is provisional; the final session result JSON is the reference
+for official valid/invalid lap data. EVO live race-position ordering is not
+implemented. Missing historical weather data is not treated as measured data.
+
+LIVE DEMO
+https://woacc.zapto.org/tracker/
+
+SOURCE CODE AND DOWNLOADS
+https://github.com/mostrotarlo/woacc-evo-tracker
+https://github.com/mostrotarlo/woacc-evo-tracker/releases/tag/v15.1.2

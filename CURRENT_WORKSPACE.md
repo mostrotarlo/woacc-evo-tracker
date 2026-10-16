@@ -1,9 +1,10 @@
 # Current Workspace
 
-Complete working copy of WOACC EVO & ACC Tracker 15.1.1.
+Complete working copy of WOACC EVO & ACC Tracker 15.1.2.
 
 - Source code, tests, entry points and build tools are included.
-- Windows application: `dist_service/WOACC Tracker/WOACC Tracker.exe`.
+- Latest release application: `release/staging/WOACC_Tracker_v15.1.2/WOACC Tracker.exe`.
+- The existing running installation remains in `dist_service/WOACC Tracker/`.
 - Current release archive and checksum: `release/`.
 - Current multilingual PDF manual: `output/pdf/`.
 - Build desktop and service engine with `build_service.ps1`.
